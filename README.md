@@ -29,7 +29,7 @@ Copyright (c) 2026 pure.science inc. Third-party code, dependencies, and assets 
 
 | Project / source | Homepage or documentation | Support the maintainers |
 | --- | --- | --- |
-| [mrdoob/three](https://github.com/mrdoob/three) | [Project home](https://github.com/mrdoob/three) | — |
+| [mrdoob/three.js](https://github.com/mrdoob/three.js) | [Homepage / docs](https://threejs.org/) | [GitHub Sponsors](https://github.com/sponsors/mrdoob) · [GitHub Sponsors](https://github.com/sponsors/HumanInteractive) · [GitHub Sponsors](https://github.com/sponsors/donmccurdy) · [GitHub Sponsors](https://github.com/sponsors/WestLangley) |
 | [react/react](https://github.com/react/react) | [Homepage / docs](https://react.dev) | — |
 | [styled-components/styled-components](https://github.com/styled-components/styled-components) | [Homepage / docs](https://styled-components.com) | [GitHub Sponsors](https://github.com/sponsors/quantizor) · [Open Collective](https://opencollective.com/styled-components) |
 
