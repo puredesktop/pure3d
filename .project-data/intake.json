@@ -1,0 +1,6 @@
+{
+  "appNames": ["Pure3D"],
+  "idea": "Adopt the existing Pure3D built-in app for app-development work. Pure3D creates and edits 3D models, object hierarchies, materials, triangle meshes and object-transform animations, with assistant tools operating on the same scene and document workflow as the UI.",
+  "questions": [],
+  "selectedAppName": "Pure3D"
+}

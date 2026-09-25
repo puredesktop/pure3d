@@ -1,0 +1,1416 @@
+{
+  "id": "3d",
+  "name": "Pure3D",
+  "permissions": [
+    "settings",
+    "filesystem",
+    "agents"
+  ],
+  "entrypoint": {
+    "kind": "dev-url",
+    "url": "http://localhost:5220"
+  },
+  "app": {
+    "id": "plugin.3d",
+    "slug": "3d",
+    "name": "Pure3D",
+    "navigationLabel": "3D",
+    "productName": "Pure3D",
+    "kind": "3d",
+    "description": "Create and edit 3D models, materials and keyframe animations.",
+    "brand": {
+      "letter": "3",
+      "label": "3D"
+    },
+    "openableExtensions": [
+      "pure3d",
+      "obj",
+      "stl",
+      "glb"
+    ],
+    "openableNameSuffixes": [
+      ".pure3d"
+    ],
+    "usePureDesktopAiPanel": true,
+    "createEntities": [
+      {
+        "id": "3d-scene",
+        "label": "3D scene",
+        "description": "Create an empty 3D scene.",
+        "appSlug": "3d",
+        "defaultName": "Untitled scene",
+        "kind": "file",
+        "extension": "pure3d",
+        "fileNameSuffix": ".pure3d",
+        "template": "{\"format\":\"pure3d\",\"version\":1,\"id\":\"new\",\"title\":\"Untitled scene\",\"objects\":[],\"keyframes\":[],\"settings\":{\"duration\":5,\"fps\":30,\"background\":\"#e9edf2\",\"grid\":true,\"camera\":{\"position\":[6,4,7],\"target\":[0,0,0]}}}"
+      }
+    ],
+    "agents": {
+      "tools": [
+        {
+          "name": "getScene",
+          "description": "Read the active scene, file path, selection and playback. Embedded texture dataUrl bytes are omitted; texture settings remain visible. Rotations are XYZ Euler radians, time is seconds, positions use meters. Objects are box/sphere/cylinder/cone/torus/plane/group/mesh; primitives have unit size.",
+          "risk": "read",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "editScene",
+          "description": "Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings. Preserve unrelated objects, object keyframes and textures when editing camera shots.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "operations": {
+                "minItems": 1,
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "cameraKeyframe"
+                        },
+                        "keyframe": {
+                          "type": "object",
+                          "properties": {
+                            "time": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 3600
+                            },
+                            "position": {
+                              "type": "array",
+                              "prefixItems": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "target": {
+                              "type": "array",
+                              "prefixItems": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "fov": {
+                              "type": "number",
+                              "minimum": 10,
+                              "maximum": 120
+                            },
+                            "easing": {
+                              "type": "string",
+                              "enum": [
+                                "linear",
+                                "smooth",
+                                "step"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "time",
+                            "position",
+                            "target",
+                            "fov",
+                            "easing"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "keyframe"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "removeCameraKeyframe"
+                        },
+                        "time": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "time"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "addTextureAsset"
+                        },
+                        "asset": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "dataUrl": {
+                              "type": "string",
+                              "maxLength": 12582912,
+                              "pattern": "^data:image\\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "dataUrl"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "asset"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "deleteTextureAsset"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "add"
+                        },
+                        "object": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "box",
+                                "sphere",
+                                "cylinder",
+                                "cone",
+                                "torus",
+                                "plane",
+                                "group",
+                                "mesh"
+                              ]
+                            },
+                            "parentId": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "visible": {
+                              "type": "boolean"
+                            },
+                            "transform": {
+                              "type": "object",
+                              "properties": {
+                                "position": {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                },
+                                "rotation": {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                },
+                                "scale": {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "position",
+                                "rotation",
+                                "scale"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "material": {
+                              "type": "object",
+                              "properties": {
+                                "color": {
+                                  "type": "string",
+                                  "pattern": "^#[\\da-f]{6}$"
+                                },
+                                "metalness": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "roughness": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "opacity": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "wireframe": {
+                                  "type": "boolean"
+                                },
+                                "texture": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "repeat": {
+                                          "type": "array",
+                                          "prefixItems": [
+                                            {
+                                              "type": "number"
+                                            },
+                                            {
+                                              "type": "number"
+                                            }
+                                          ]
+                                        },
+                                        "offset": {
+                                          "type": "array",
+                                          "prefixItems": [
+                                            {
+                                              "type": "number"
+                                            },
+                                            {
+                                              "type": "number"
+                                            }
+                                          ]
+                                        },
+                                        "rotation": {
+                                          "type": "number"
+                                        },
+                                        "flipY": {
+                                          "type": "boolean"
+                                        },
+                                        "wrapS": {
+                                          "type": "string",
+                                          "enum": [
+                                            "repeat",
+                                            "clamp",
+                                            "mirror"
+                                          ]
+                                        },
+                                        "wrapT": {
+                                          "type": "string",
+                                          "enum": [
+                                            "repeat",
+                                            "clamp",
+                                            "mirror"
+                                          ]
+                                        },
+                                        "assetId": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        }
+                                      },
+                                      "required": [
+                                        "assetId"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            "geometry": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "positions": {
+                                      "minItems": 9,
+                                      "maxItems": 300000,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "indices": {
+                                      "anyOf": [
+                                        {
+                                          "minItems": 3,
+                                          "maxItems": 600000,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991
+                                          }
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ]
+                                    },
+                                    "uv": {
+                                      "maxItems": 200000,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "number"
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "positions",
+                                    "indices"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "kind",
+                            "parentId",
+                            "visible",
+                            "transform",
+                            "material",
+                            "geometry"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "object"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "update"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "patch": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            "visible": {
+                              "type": "boolean"
+                            },
+                            "parentId": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "transform": {
+                              "type": "object",
+                              "properties": {
+                                "position": {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                },
+                                "rotation": {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                },
+                                "scale": {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false
+                            },
+                            "material": {
+                              "type": "object",
+                              "properties": {
+                                "color": {
+                                  "type": "string",
+                                  "pattern": "^#[\\da-f]{6}$"
+                                },
+                                "metalness": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "roughness": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "opacity": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "wireframe": {
+                                  "type": "boolean"
+                                },
+                                "texture": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "repeat": {
+                                          "type": "array",
+                                          "prefixItems": [
+                                            {
+                                              "type": "number"
+                                            },
+                                            {
+                                              "type": "number"
+                                            }
+                                          ]
+                                        },
+                                        "offset": {
+                                          "type": "array",
+                                          "prefixItems": [
+                                            {
+                                              "type": "number"
+                                            },
+                                            {
+                                              "type": "number"
+                                            }
+                                          ]
+                                        },
+                                        "rotation": {
+                                          "type": "number"
+                                        },
+                                        "flipY": {
+                                          "type": "boolean"
+                                        },
+                                        "wrapS": {
+                                          "type": "string",
+                                          "enum": [
+                                            "repeat",
+                                            "clamp",
+                                            "mirror"
+                                          ]
+                                        },
+                                        "wrapT": {
+                                          "type": "string",
+                                          "enum": [
+                                            "repeat",
+                                            "clamp",
+                                            "mirror"
+                                          ]
+                                        },
+                                        "assetId": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        }
+                                      },
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "id",
+                        "patch"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "clearMaterialOverride"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "delete"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "duplicate"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "newId": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "id",
+                        "newId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "mesh"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "geometry": {
+                          "type": "object",
+                          "properties": {
+                            "positions": {
+                              "minItems": 9,
+                              "maxItems": 300000,
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              }
+                            },
+                            "indices": {
+                              "anyOf": [
+                                {
+                                  "minItems": 3,
+                                  "maxItems": 600000,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "uv": {
+                              "maxItems": 200000,
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          "required": [
+                            "positions",
+                            "indices"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "id",
+                        "geometry"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "moveVertex"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "index": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "position": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "id",
+                        "index",
+                        "position"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "subdivide"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "unwrap"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "id"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "keyframe"
+                        },
+                        "keyframe": {
+                          "type": "object",
+                          "properties": {
+                            "objectId": {
+                              "type": "string"
+                            },
+                            "property": {
+                              "type": "string",
+                              "enum": [
+                                "position",
+                                "rotation",
+                                "scale"
+                              ]
+                            },
+                            "time": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 3600
+                            },
+                            "value": {
+                              "type": "array",
+                              "prefixItems": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "easing": {
+                              "type": "string",
+                              "enum": [
+                                "linear",
+                                "smooth",
+                                "step"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "objectId",
+                            "property",
+                            "time",
+                            "value",
+                            "easing"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "keyframe"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "removeKeyframe"
+                        },
+                        "objectId": {
+                          "type": "string"
+                        },
+                        "property": {
+                          "type": "string",
+                          "enum": [
+                            "position",
+                            "rotation",
+                            "scale"
+                          ]
+                        },
+                        "time": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "objectId",
+                        "property",
+                        "time"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "type": "string",
+                          "const": "settings"
+                        },
+                        "title": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "settings": {
+                          "type": "object",
+                          "properties": {
+                            "duration": {
+                              "type": "number",
+                              "minimum": 0.1,
+                              "maximum": 3600
+                            },
+                            "fps": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 120
+                            },
+                            "background": {
+                              "type": "string",
+                              "pattern": "^#[\\da-f]{6}$"
+                            },
+                            "grid": {
+                              "type": "boolean"
+                            },
+                            "camera": {
+                              "type": "object",
+                              "properties": {
+                                "position": {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                },
+                                "target": {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ]
+                                },
+                                "fov": {
+                                  "type": "number",
+                                  "minimum": 10,
+                                  "maximum": 120
+                                }
+                              },
+                              "required": [
+                                "position",
+                                "target"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "op"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "operations"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "setWorkspace",
+          "description": "Operate selection, transform mode, playback, playhead, looping, inspector visibility, cameraPreview or frame selection. cameraPreview:true uses the animated camera track at the playhead, with clean 16:9 framing; false restores the editing camera. Combine cameraPreview:true, time:0, playing:true to play a camera journey. Preview does not rewrite the saved shots or object animation. selectedVertex selects a mesh vertex and pauses playback; null returns to object mode. Changing objects, rotating/scaling or playing exits vertex mode. Framing saves the editing camera; selection, preview and scrubbing are transient.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "selectedId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selectedVertex": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "translate",
+                  "rotate",
+                  "scale"
+                ]
+              },
+              "playing": {
+                "type": "boolean"
+              },
+              "time": {
+                "type": "number",
+                "minimum": 0
+              },
+              "loop": {
+                "type": "boolean"
+              },
+              "inspector": {
+                "type": "boolean"
+              },
+              "cameraPreview": {
+                "type": "boolean"
+              },
+              "frameSelection": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "newScene",
+          "description": "Save the current scene before creating a blank scene. Optional title. Returns the new scene and saved path. No seeded objects.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "openScene",
+          "description": "Save the current scene, then open a .pure3d document from a workspace path. Parse failures leave the current scene untouched.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "saveScene",
+          "description": "Save the active scene. Optional path writes a .pure3d copy there and makes it the active document; otherwise saves to its current path or creates a draft. Returns its saved path.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "importModel",
+          "description": "Add static geometry from an OBJ, STL or self-contained GLB workspace file. OBJ material sidecars are unsupported. GLB supports base-color image textures and UVs; other texture maps, skins, morph targets and existing animation clips are refused. Imported meshes retain hierarchy and base color/PBR values.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "importTexture",
+          "description": "Apply a workspace PNG, JPEG or WebP image (up to 8 MiB) as an object base-color texture, embedded in the scene. Resets base color to white and supplies box UVs for meshes without UVs. Adjust tint and tiling with editScene material fields. Groups cannot have textures.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "generateTexture",
+          "description": "Generate and apply an object base-color texture in the active scene using the drawer image model (or app default). Describe flat, unlit surface color/detail; request seamless edges for tiling. Defaults to square 1024x1024, medium quality, opaque PNG. editExisting=true sends the current texture as an image-editing source; requires an editing-capable image model. Embeds the result with undo and saving, resets base color to white, preserves tiling, and supplies missing mesh UVs. Groups cannot have textures. Makes one generation request; never automatically repeat a failed paid call. If saving fails after application, use saveScene to retry saving.",
+          "risk": "external",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "size": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "1024x1024",
+                  "1536x1024",
+                  "1024x1536"
+                ]
+              },
+              "editExisting": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "prompt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "applyTexture",
+          "description": "Apply a retained texture-library asset by assetId to explicit object IDs. Set recursive:true to create a local binding on every object in each target subtree; otherwise a group binding is inherited by children unless a child already has its own texture override. All asset and target IDs are validated before the scene changes. Referenced texture bindings preserve each target's existing UV settings and textured meshes without UVs receive box-projected UVs. Returns scene context without embedded texture bytes.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "objectIds": {
+                "minItems": 1,
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "recursive": {
+                "type": "boolean"
+              },
+              "assetId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "objectIds",
+              "assetId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "patchTextures",
+          "description": "Atomically patch tint/base color and/or texture repeat, offset, rotation, flipY, wrapS and wrapT on explicit object IDs. Set recursive:true to give every object in each target subtree a local patched material; otherwise a group patch is inherited and child overrides remain intact. UV texture settings require a resolved texture on every target. Textured meshes without UVs receive box-projected UVs. Returns scene context without embedded texture bytes.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "objectIds": {
+                "minItems": 1,
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "recursive": {
+                "type": "boolean"
+              },
+              "patch": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "type": "string",
+                    "pattern": "^#[\\da-f]{6}$"
+                  },
+                  "repeat": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  },
+                  "offset": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  },
+                  "rotation": {
+                    "type": "number"
+                  },
+                  "flipY": {
+                    "type": "boolean"
+                  },
+                  "wrapS": {
+                    "type": "string",
+                    "enum": [
+                      "repeat",
+                      "clamp",
+                      "mirror"
+                    ]
+                  },
+                  "wrapT": {
+                    "type": "string",
+                    "enum": [
+                      "repeat",
+                      "clamp",
+                      "mirror"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "objectIds",
+              "patch"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "exportModel",
+          "description": "Export GLB with baked transform animation, OBJ/STL geometry of the current pose, or the actual viewport PNG, to an explicit workspace path. Extension must match format. Geometry exports exclude hidden objects, helpers and gizmos. PNG includes visible viewport controls.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "format": {
+                "type": "string",
+                "enum": [
+                  "glb",
+                  "obj",
+                  "stl",
+                  "png"
+                ]
+              }
+            },
+            "required": [
+              "path",
+              "format"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "history",
+          "description": "Undo or redo one edit in the active scene. Returns the complete scene context.",
+          "risk": "write",
+          "requiresApproval": false,
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "undo",
+                  "redo"
+                ]
+              }
+            },
+            "required": [
+              "direction"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "captureViewport",
+          "description": "Read an actual rendered viewport PNG of the active scene at the current playhead. Refuses if the renderer is unavailable.",
+          "risk": "read",
+          "requiresApproval": false,
+          "requiresCapabilities": [
+            "vision"
+          ],
+          "inputSchema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  }
+}

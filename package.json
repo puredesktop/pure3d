@@ -1,0 +1,35 @@
+{
+  "name": "@purescience/pure3d",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "manifest": "node scripts/manifest.mjs",
+    "puredesktop:check": "node scripts/manifest.mjs --check"
+  },
+  "dependencies": {
+    "@purescience/platform-ui": "file:../../packages/ui",
+    "lucide-react": "^0.511.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "styled-components": "^6.1.18",
+    "three": "^0.186.0",
+    "zod": "^3.25.76",
+    "@purescience/platform-bridge": "file:../../packages/bridge"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@types/three": "^0.185.0",
+    "@vitejs/plugin-react-swc": "^3.10.2",
+    "happy-dom": "^17.4.4",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  },
+  "license": "MIT"
+}
