@@ -1,7 +1,4 @@
 import * as THREE from 'three'
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js'
-import { STLLoader } from 'three/addons/loaders/STLLoader.js'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { makeObject } from './scene'
 import { nodeTransform, disposeScene } from './threeScene'
 import { objectSchema } from './schemas.mjs'
@@ -156,15 +153,18 @@ export async function importModel(
 ): Promise<ImportedModel> {
   let root: THREE.Object3D
   let textures: Promise<unknown[]> | undefined
-  if (extension === 'obj' && typeof data === 'string')
+  if (extension === 'obj' && typeof data === 'string') {
+    const { OBJLoader } = await import('three/addons/loaders/OBJLoader.js')
     root = new OBJLoader().parse(data)
-  else if (extension === 'stl' && data instanceof ArrayBuffer)
+  } else if (extension === 'stl' && data instanceof ArrayBuffer) {
+    const { STLLoader } = await import('three/addons/loaders/STLLoader.js')
     root = new THREE.Mesh(
       new STLLoader().parse(data),
       new THREE.MeshStandardMaterial(),
     )
-  else if (extension === 'glb' && data instanceof ArrayBuffer) {
+  } else if (extension === 'glb' && data instanceof ArrayBuffer) {
     assertSelfContainedGLB(data)
+    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js')
     const loaded = await new GLTFLoader().parseAsync(data, '')
     root = loaded.scene
     textures = loaded.parser.getDependencies('texture')

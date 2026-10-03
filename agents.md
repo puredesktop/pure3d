@@ -29,7 +29,7 @@ Use `unwrap` for explicit box UV projection. These edits share undo and autosave
 
 Use `3d.importTexture` with an object ID and workspace PNG/JPEG/WebP path for
 base-color textures. Images are embedded, limited to 8 MiB and 8192 pixels per
-side. Import resets base color to white. Material texture patches merge
+side. Import resets base color to white. A group binding is inherited by children unless they have a local texture override. Material texture patches merge
 repeat/offset UV pairs, rotation in radians, flipY and wrapS/wrapT settings;
 texture:null removes the image. `getScene` omits the embedded dataUrl bytes.
 
@@ -56,6 +56,8 @@ every target descendant; a non-recursive group patch remains inherited. UV
 settings require a resolved texture on every target. Textured meshes missing
 UVs receive box projection automatically. Check IDs first: all targets are
 validated before either tool changes the scene.
+
+Async imports and texture generation refuse to apply results after the active document changes; edits within the same document remain valid.
 
 All content mutations edit the active scene and save automatically. `saveScene`
 without a path saves the active document or creates a draft. With a

@@ -1,7 +1,4 @@
 import * as THREE from 'three'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
-import { OBJExporter } from 'three/addons/exporters/OBJExporter.js'
-import { STLExporter } from 'three/addons/exporters/STLExporter.js'
 import { pose, resolveMaterial, sampleProperty } from './scene'
 import { createGeometry } from './geometry'
 import { loadTexture, TextureAssetCache } from './textures'
@@ -30,10 +27,6 @@ function disposeNode(node: THREE.Object3D) {
   }
 }
 
-function materialSignature(document: SceneDocument, object: SceneObject) {
-  return JSON.stringify(resolveMaterial(document, object))
-}
-
 /** Incrementally projects immutable scene snapshots into a stable Three.js tree. */
 export function createSceneReconciler(
   initial: SceneDocument,
@@ -44,6 +37,8 @@ export function createSceneReconciler(
   const cache = new TextureAssetCache()
   const objectSignatures = new Map<string, string>()
   const materialSignatures = new Map<string, string>()
+  const textureLoads = new Map<string, Promise<void>>()
+  const objectImages = new Map<string, string | undefined>()
   let ready: Promise<void> = Promise.resolve()
   const result: ReconciledScene = {
     root,
@@ -55,6 +50,7 @@ export function createSceneReconciler(
     dispose() {
       for (const node of objects.values()) disposeNode(node)
       objects.clear()
+      textureLoads.clear()
       cache.dispose()
       root.clear()
     },
@@ -69,8 +65,11 @@ export function createSceneReconciler(
         objects.delete(id)
         objectSignatures.delete(id)
         materialSignatures.delete(id)
+        textureLoads.delete(id)
+        objectImages.delete(id)
       }
-    const pending: Promise<void>[] = []
+    const usedAssets = new Map<string, SceneDocument['textureAssets'][number]>()
+    const assets = new Map(document.textureAssets.map(asset => [asset.id, asset]))
     for (const object of document.objects) {
       const geometrySignature = JSON.stringify({ kind: object.kind, geometry: object.geometry })
       let node = objects.get(object.id)
@@ -84,8 +83,10 @@ export function createSceneReconciler(
           ? new THREE.Group()
           : new THREE.Mesh(createGeometry(object), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }))
         objects.set(object.id, node)
-        objectSignatures.delete(object.id)
+        objectSignatures.set(object.id, geometrySignature)
         materialSignatures.delete(object.id)
+        textureLoads.delete(object.id)
+        objectImages.delete(object.id)
       }
       node.name = object.id
       node.userData = { pure3dId: object.id, label: object.name }
@@ -96,20 +97,24 @@ export function createSceneReconciler(
         objectSignatures.set(object.id, geometrySignature)
       }
       if (node instanceof THREE.Mesh) {
-        const signature = materialSignature(document, object)
-        if (materialSignatures.get(object.id) !== signature) {
+        const resolved = resolveMaterial(document, object)
+        const asset = resolved.texture ? assets.get(resolved.texture.assetId) : undefined
+        if (asset) usedAssets.set(asset.id, asset)
+        const signature = JSON.stringify(resolved)
+        if (materialSignatures.get(object.id) !== signature || objectImages.get(object.id) !== asset?.dataUrl) {
+          textureLoads.delete(object.id)
           disposeNodeMaterial(node.material)
-          const { texture, ...properties } = resolveMaterial(document, object)
+          const { texture, ...properties } = resolved
           const material = new THREE.MeshStandardMaterial({ ...properties, transparent: properties.opacity < 1, side: THREE.DoubleSide })
           if (texture) {
-            const asset = document.textureAssets.find(item => item.id === texture.assetId)
             if (!asset) throw new Error(`Unknown texture asset: ${texture.assetId}`)
             const loaded = cache.texture(asset, texture)
             material.map = loaded.texture
-            pending.push(loaded.ready)
+            textureLoads.set(object.id, loaded.ready)
           }
           node.material = material
           materialSignatures.set(object.id, signature)
+          objectImages.set(object.id, asset?.dataUrl)
         }
       }
     }
@@ -118,12 +123,8 @@ export function createSceneReconciler(
       const parent = object.parentId ? objects.get(object.parentId)! : root
       if (node.parent !== parent) parent.add(node)
     }
-    const usedAssets = document.objects.flatMap(object => {
-      const texture = resolveMaterial(document, object).texture
-      return texture ? document.textureAssets.filter(asset => asset.id === texture.assetId) : []
-    })
-    cache.retain(usedAssets)
-    ready = Promise.all(pending).then(() => {})
+    cache.retain([...usedAssets.values()])
+    ready = Promise.all(textureLoads.values()).then(() => {})
     updatePose(document, objects, poseTime)
   }
   reconcile(initial, time)
@@ -292,25 +293,30 @@ export async function exportScene(
     }
     return true
   }
-  for (const [id, node] of built.objects)
-    if (!visible(node)) {
-      built.objects.delete(id)
-      node.removeFromParent()
-      disposeScene(node)
-    }
-  built.root.updateMatrixWorld(true)
   try {
     await built.ready
-    if (format === 'obj')
+    for (const [id, node] of built.objects)
+      if (!visible(node)) {
+        built.objects.delete(id)
+        node.removeFromParent()
+        disposeScene(node)
+      }
+    built.root.updateMatrixWorld(true)
+    if (format === 'obj') {
+      const { OBJExporter } = await import('three/addons/exporters/OBJExporter.js')
       return {
         data: new OBJExporter().parse(built.root),
         mimeType: 'text/plain',
       }
-    if (format === 'stl')
+    }
+    if (format === 'stl') {
+      const { STLExporter } = await import('three/addons/exporters/STLExporter.js')
       return {
         data: new STLExporter().parse(built.root),
         mimeType: 'model/stl',
       }
+    }
+    const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js')
     return {
       data: (await new GLTFExporter().parseAsync(built.root, {
         binary: true,

@@ -12,6 +12,7 @@ import {
 import { transformOperations } from '../lib/scene'
 import { VertexHandles } from '../lib/VertexHandles'
 import type { Vec3 } from '../types'
+import { demandRenderer } from '../lib/demandRenderer'
 import { cameraPose } from '../lib/cameraTrack'
 
 export interface ViewportAPI {
@@ -81,6 +82,7 @@ export const SceneViewport = memo(function SceneViewport({
     let selectedId: string | null = null
     let vertices: VertexHandles | null = null
     let cameraSignature = ''
+    let invalidate = () => {}
     const renderView = () => {
       const width = element.clientWidth, height = element.clientHeight
       if (!width || !height) return
@@ -97,8 +99,11 @@ export const SceneViewport = memo(function SceneViewport({
     let disposed = false
     const watchTextures = () => {
       const current = built
-      void current.ready.catch(error => {
-        if (!disposed && built === current) callbacks.current.onError(error)
+      const source = document
+      void current.ready.then(() => {
+        if (!disposed && source === document) invalidate()
+      }).catch(error => {
+        if (!disposed && source === document) callbacks.current.onError(error)
       })
     }
     watchTextures()
@@ -186,6 +191,7 @@ export const SceneViewport = memo(function SceneViewport({
       gizmo.getHelper().visible = !!gizmo.object && !state.playing && !state.cameraPreview
       if (box) box.visible = !state.cameraPreview
       if (vertices) vertices.points.visible = !state.cameraPreview
+      invalidate()
     }
     const unsubscribeContent = store.subscribeContent(refresh)
     const unsubscribeWorkspace = store.subscribeWorkspace(refresh)
@@ -227,6 +233,8 @@ export const SceneViewport = memo(function SceneViewport({
         updatePose(document, built.objects, state.time)
       }
     })
+    orbit.addEventListener('change', () => { updateCamera(); invalidate() })
+    gizmo.addEventListener('change', () => invalidate())
     orbit.addEventListener('end', persistCameraAfterNavigation)
     const resize = new ResizeObserver(() => {
       const width = element.clientWidth
@@ -235,6 +243,7 @@ export const SceneViewport = memo(function SceneViewport({
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       renderer.setSize(width, height)
+      invalidate()
     })
     resize.observe(element)
     let pointer: { x: number; y: number; gizmo: boolean } | null = null
@@ -296,9 +305,9 @@ export const SceneViewport = memo(function SceneViewport({
     renderer.domElement.addEventListener('pointerup', up)
     api.current = {
       capture: async (time = store.getSnapshot().time) => {
-        const current = built
-        await current.ready
-        if (built !== current)
+        const capturedDocument = document
+        await built.ready
+        if (document !== capturedDocument)
           throw new Error('Scene changed while preparing the viewport capture')
         if (disposed || renderer.getContext().isContextLost())
           throw new Error('Viewport renderer unavailable')
@@ -310,9 +319,10 @@ export const SceneViewport = memo(function SceneViewport({
         orbit.update()
         box?.update()
         renderView()
-        const dataUrl = renderer.domElement.toDataURL('image/png')
-        cameraSignature = ''; refresh()
-        return dataUrl
+        try { return renderer.domElement.toDataURL('image/png') } finally {
+          updatePose(document, built.objects, store.getSnapshot().time)
+          cameraSignature = ''; refresh()
+        }
       },
       frame: () => {
         const state = store.getSnapshot()
@@ -339,9 +349,13 @@ export const SceneViewport = memo(function SceneViewport({
     }
     let previous = performance.now()
     let elapsed = 0
-    renderer.setAnimationLoop(() => {
+    let playingLastFrame = false
+    const rendering = demandRenderer(() => {
       const now = performance.now()
-      elapsed += Math.min((now - previous) / 1000, 0.1)
+      const playing = store.getSnapshot().playing
+      if (playing && playingLastFrame) elapsed += Math.min((now - previous) / 1000, 0.1)
+      else elapsed = 0
+      playingLastFrame = playing
       previous = now
       if (elapsed >= 1 / 30) {
         store.tick(elapsed)
@@ -352,7 +366,10 @@ export const SceneViewport = memo(function SceneViewport({
       orbit.update()
       box?.update()
       renderView()
+      return store.getSnapshot().playing
     })
+    invalidate = rendering.invalidate
+    invalidate()
     return () => {
       disposed = true
       api.current = null
@@ -362,7 +379,7 @@ export const SceneViewport = memo(function SceneViewport({
       if (cameraPersistTimeout !== undefined)
         window.clearTimeout(cameraPersistTimeout)
       resize.disconnect()
-      renderer.setAnimationLoop(null)
+      rendering.dispose()
       renderer.domElement.removeEventListener('pointerdown', down)
       renderer.domElement.removeEventListener('pointerup', up)
       orbit.removeEventListener('end', persistCameraAfterNavigation)

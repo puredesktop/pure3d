@@ -336,11 +336,11 @@ export const toolDefinitions = {
     z.object({ path: z.string().min(1) }).strict(),
   ),
   importTexture: tool(
-    'Apply a workspace PNG, JPEG or WebP image (up to 8 MiB) as an object base-color texture, embedded in the scene. Resets base color to white and supplies box UVs for meshes without UVs. Adjust tint and tiling with editScene material fields. Groups cannot have textures.',
+    'Apply a workspace PNG, JPEG or WebP image (up to 8 MiB) as an object base-color texture, embedded in the scene. Resets base color to white and supplies box UVs for meshes without UVs. Adjust tint and tiling with editScene material fields. Group textures are inherited by children unless they have a local texture override.',
     z.object({ id: z.string(), path: z.string().min(1) }).strict(),
   ),
   generateTexture: tool(
-    'Generate and apply an object base-color texture in the active scene using the drawer image model (or app default). Describe flat, unlit surface color/detail; request seamless edges for tiling. Defaults to square 1024x1024, medium quality, opaque PNG. editExisting=true sends the current texture as an image-editing source; requires an editing-capable image model. Embeds the result with undo and saving, resets base color to white, preserves tiling, and supplies missing mesh UVs. Groups cannot have textures. Makes one generation request; never automatically repeat a failed paid call. If saving fails after application, use saveScene to retry saving.',
+    'Generate and apply an object base-color texture in the active scene using the drawer image model (or app default). Describe flat, unlit surface color/detail; request seamless edges for tiling. Defaults to square 1024x1024, medium quality, opaque PNG. editExisting=true sends the current texture as an image-editing source; requires an editing-capable image model. Embeds the result with undo and saving, resets base color to white, preserves tiling, and supplies missing mesh UVs. Group textures are inherited by children unless they have a local texture override. Makes one generation request; never automatically repeat a failed paid call. If saving fails after application, use saveScene to retry saving.',
     z
       .object({
         id: z.string(),

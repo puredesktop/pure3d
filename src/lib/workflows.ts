@@ -18,6 +18,10 @@ import type { SceneStore } from './SceneStore'
 import type { WorkspaceState } from './SceneStore'
 import type { ViewportAPI } from '../components/SceneViewport'
 
+function assertDocument(store: SceneStore, epoch: number) {
+  if (store.getDocumentEpoch() !== epoch) throw new Error('The scene changed while preparing this asset; nothing was applied')
+}
+
 export type ExportFormat = 'glb' | 'obj' | 'stl' | 'png'
 export function toggleVertexEditing(store: SceneStore) {
   const { scene, selectedId, selectedVertex } = store.getSnapshot()
@@ -45,9 +49,11 @@ export async function applyImageTexture(
   id: string,
   dataUrl: string,
 ) {
+  const epoch = store.getDocumentEpoch()
   const object = store.getSnapshot().scene.objects.find(o => o.id === id)
   if (!object) throw new Error('Select an object for the texture')
   const validated = await validateTexture(dataUrl)
+  assertDocument(store, epoch)
   const assetId = crypto.randomUUID()
   store.edit([
     { op: 'addTextureAsset', asset: { id: assetId, dataUrl: validated } },
@@ -65,7 +71,9 @@ export async function importWorkspaceTexture(
   id: string,
   path: string,
 ) {
+  const epoch = store.getDocumentEpoch()
   const data = await readPlatformFileBinaryDataUrl(path, 8 * 1024 * 1024)
+  assertDocument(store, epoch)
   return applyImageTexture(store, id, data)
 }
 
@@ -80,6 +88,7 @@ export async function generateObjectTexture(
     editExisting?: boolean
   },
 ) {
+  const epoch = store.getDocumentEpoch()
   const object = store.getSnapshot().scene.objects.find(o => o.id === id)
   if (!object) throw new Error('Select an object for the texture')
   const source = editExisting ? resolveMaterial(store.getSnapshot().scene, object).texture : null
@@ -107,6 +116,7 @@ export async function generateObjectTexture(
         }
       : {}),
   })
+  assertDocument(store, epoch)
   const assetId = await applyImageTexture(
     store,
     id,
@@ -191,6 +201,7 @@ export function patchTextureReferences(
 }
 
 export async function importWorkspaceModel(store: SceneStore, path: string) {
+  const epoch = store.getDocumentEpoch()
   const extension = path.split('.').pop()!.toLowerCase()
   const data =
     extension === 'obj'
@@ -199,6 +210,7 @@ export async function importWorkspaceModel(store: SceneStore, path: string) {
           (await readPlatformFileBinary(path, 32 * 1024 * 1024)).base64,
         )
   const objects = await importModel(data, extension, path.split(/[\\/]/).pop())
+  assertDocument(store, epoch)
   store.edit([
     ...objects.textureAssets.map(asset => ({ op: 'addTextureAsset' as const, asset })),
     ...objects.map(object => ({ op: 'add' as const, object })),

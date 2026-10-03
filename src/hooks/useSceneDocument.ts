@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useDocumentLifecycle } from '@purescience/platform-ui/bridge/react/useDocumentLifecycle'
 import type { DocumentLifecycleDoc } from '@purescience/platform-ui/bridge/react/useDocumentLifecycle'
 import {
@@ -21,6 +21,13 @@ function assertScenePath(path: string) {
 }
 
 export function useSceneDocument(store: SceneStore, ready: boolean) {
+  const loading = useRef(false)
+  const actions = useRef(Promise.resolve())
+  const enqueue = useCallback(function enqueue<T>(action: () => Promise<T>): Promise<T> {
+    const next = actions.current.then(action)
+    actions.current = next.then(() => {}, () => {})
+    return next
+  }, [])
   const lifecycle = useDocumentLifecycle({
     appSlug: '3d',
     suffix: '.pure3d',
@@ -29,7 +36,7 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
     serialize: () => [
       {
         name: null,
-        content: JSON.stringify(store.getDocument(), null, 2),
+        content: JSON.stringify(store.getDocument(true), null, 2),
       },
     ],
   })
@@ -40,7 +47,7 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
   useEffect(
     () =>
       store.subscribe(change => {
-        if (ready && (change.domain === 'content' || change.persisted)) markDirty()
+        if (ready && !loading.current && (change.domain === 'content' || change.persisted)) markDirty()
       }),
     [store, ready, markDirty],
   )
@@ -52,12 +59,19 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
       if (path) {
         assertScenePath(path)
         await flush({ throwOnError: true })
-        const current = store.getDocument()
+        const source = store.getContentSnapshot()
+        const camera = store.getCameraSnapshot()
+        const current = store.getDocument(true)
         await writePlatformTextFile(
           path,
           JSON.stringify(current, null, 2),
         )
         adopt(path, { title: current.title })
+        if (store.getContentSnapshot() !== source || store.getCameraSnapshot() !== camera) {
+          store.persistCamera()
+          markDirty()
+          await flush({ throwOnError: true })
+        }
         return path
       }
       const draft = await ensureDraft()
@@ -65,7 +79,7 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
       await flush({ throwOnError: true })
       return draft
     },
-    [ready, store, flush, adopt, ensureDraft],
+    [ready, store, flush, adopt, ensureDraft, markDirty],
   )
 
   const open = useCallback(
@@ -78,7 +92,8 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
       store.persistCamera()
       await flush({ throwOnError: true })
       adopt(path, { title: scene.title })
-      store.replace(scene)
+      loading.current = true
+      try { store.replace(scene) } finally { loading.current = false }
       if (value.id === 'new') markDirty()
       return path
     },
@@ -99,5 +114,8 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
     [ready, store, flush, reset, save],
   )
 
-  return { lifecycle, doc: lifecycle.doc, save, open, create }
+  const queuedSave = useCallback((path?: string) => enqueue(() => save(path)), [enqueue, save])
+  const queuedOpen = useCallback((path: string) => enqueue(() => open(path)), [enqueue, open])
+  const queuedCreate = useCallback((title?: string) => enqueue(() => create(title)), [enqueue, create])
+  return { lifecycle, doc: lifecycle.doc, save: queuedSave, open: queuedOpen, create: queuedCreate }
 }

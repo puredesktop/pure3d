@@ -184,7 +184,7 @@ export function Workspace({
       const current = store.getSnapshot()
       if (standalone) {
         download(
-          JSON.stringify(current.scene, null, 2),
+          JSON.stringify(store.getDocument(true), null, 2),
           `${basename(current.scene.title)}.pure3d`,
           'application/json',
         )
