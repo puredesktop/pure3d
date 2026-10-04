@@ -14,6 +14,11 @@ import { VertexHandles } from '../lib/VertexHandles'
 import type { Vec3 } from '../types'
 import { demandRenderer } from '../lib/demandRenderer'
 import { cameraPose } from '../lib/cameraTrack'
+import {
+  platformViewportTheme,
+  resolveViewportBackground,
+  type ViewportTheme,
+} from '../lib/viewportTheme'
 
 export interface ViewportAPI {
   capture: (time?: number) => Promise<string>
@@ -82,6 +87,7 @@ export const SceneViewport = memo(function SceneViewport({
     let selectedId: string | null = null
     let vertices: VertexHandles | null = null
     let cameraSignature = ''
+    let viewportTheme: ViewportTheme = platformViewportTheme()
     let invalidate = () => {}
     const renderView = () => {
       const width = element.clientWidth, height = element.clientHeight
@@ -150,7 +156,9 @@ export const SceneViewport = memo(function SceneViewport({
         cameraSignature = signature
         orbit.update()
       }
-      scene.background = new THREE.Color(document.settings.background)
+      scene.background = new THREE.Color(
+        resolveViewportBackground(document.settings.background, viewportTheme),
+      )
       orbit.enabled = !state.cameraPreview
       grid.visible = document.settings.grid && !state.cameraPreview
       axes.visible = document.settings.grid && !state.cameraPreview
@@ -196,6 +204,16 @@ export const SceneViewport = memo(function SceneViewport({
     const unsubscribeContent = store.subscribeContent(refresh)
     const unsubscribeWorkspace = store.subscribeWorkspace(refresh)
     const unsubscribeCamera = store.subscribeCamera(refresh)
+    const themeObserver = new MutationObserver(() => {
+      const nextTheme = platformViewportTheme()
+      if (nextTheme === viewportTheme) return
+      viewportTheme = nextTheme
+      refresh()
+    })
+    themeObserver.observe(globalThis.document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-platform-theme', 'data-platform-appearance'],
+    })
     refresh()
     gizmo.addEventListener('dragging-changed', e => {
       orbit.enabled = !e.value
@@ -376,6 +394,7 @@ export const SceneViewport = memo(function SceneViewport({
       unsubscribeContent()
       unsubscribeWorkspace()
       unsubscribeCamera()
+      themeObserver.disconnect()
       if (cameraPersistTimeout !== undefined)
         window.clearTimeout(cameraPersistTimeout)
       resize.disconnect()
