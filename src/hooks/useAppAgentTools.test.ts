@@ -236,7 +236,7 @@ describe('Assistant surface', () => {
       })
       expect(result.scene.objects[0].material.texture.dataUrl).toBeUndefined()
       expect(store.getSnapshot().scene.objects[0].material).toMatchObject({
-        texture: { dataUrl: 'data:image/png;base64,AQID' },
+        texture: { assetId: expect.any(String) },
         color: '#ffffff',
       })
       store.edit([
@@ -264,9 +264,10 @@ describe('Assistant surface', () => {
         ],
       })
       expect(store.getSnapshot().scene.objects[0].material.texture).toEqual({
-        dataUrl: 'data:image/png;base64,BAUG',
+        assetId: expect.any(String),
         repeat: [2, 3],
       })
+      expect(store.getSnapshot().scene.textureAssets.find(asset => asset.id === store.getSnapshot().scene.objects[0].material.texture?.assetId)?.dataUrl).toBe('data:image/png;base64,BAUG')
       expect(document.save).toHaveBeenCalledTimes(2)
       store.history('undo')
       expect(
@@ -301,8 +302,8 @@ describe('Assistant surface', () => {
     }
     try {
       await expect(
-        invoke('generateTexture', { ...args, id: group.id }),
-      ).rejects.toThrow('Select a shape')
+        invoke('generateTexture', { ...args, id: 'missing-object' }),
+      ).rejects.toThrow('Select an object')
       await expect(
         invoke('generateTexture', { ...args, editExisting: true }),
       ).rejects.toThrow('no texture to edit')
@@ -335,7 +336,7 @@ describe('Assistant surface', () => {
         name: 'Edited during generation',
         material: {
           roughness: 0.8,
-          texture: { dataUrl: 'data:image/png;base64,AQID' },
+          texture: { assetId: expect.any(String) },
         },
       })
       expect(document.save).toHaveBeenCalledTimes(1)

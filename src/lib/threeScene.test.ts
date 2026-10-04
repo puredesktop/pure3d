@@ -252,3 +252,43 @@ describe('Three.js document adapter', () => {
     ).not.toThrow()
   })
 })
+
+it('retains in-flight texture readiness across unrelated scene edits', async () => {
+  let complete!: (image: HTMLImageElement) => void
+  const load = vi.spyOn(THREE.ImageLoader.prototype, 'load').mockImplementation((_url, onLoad) => { complete = onLoad!; return {} as HTMLImageElement })
+  const scene = emptyScene(), object = makeObject()
+  object.material.texture = { assetId: 'image' }
+  scene.textureAssets = [{ id: 'image', dataUrl: 'data:image/png;base64,AA==' }]
+  scene.objects = [object]
+  const built = createSceneReconciler(scene)
+  try {
+    const next = structuredClone(scene); next.objects[0].name = 'Renamed while loading'
+    built.reconcile(next)
+    let ready = false
+    void built.ready.then(() => { ready = true })
+    await Promise.resolve(); await Promise.resolve()
+    expect(ready).toBe(false)
+    complete({ width: 2, height: 2 } as HTMLImageElement)
+    await built.ready
+    expect(ready).toBe(true)
+    expect(load).toHaveBeenCalledTimes(1)
+  } finally { built.dispose(); load.mockRestore() }
+})
+
+it('reloads changed image bytes under an existing asset ID', async () => {
+  const load = vi.spyOn(THREE.ImageLoader.prototype, 'load').mockImplementation((_url, complete) => { complete?.({ width: 2, height: 2 } as HTMLImageElement); return {} as HTMLImageElement })
+  const scene = emptyScene(), object = makeObject()
+  object.material.texture = { assetId: 'image' }
+  scene.textureAssets = [{ id: 'image', dataUrl: 'data:image/png;base64,AA==' }]
+  scene.objects = [object]
+  const built = createSceneReconciler(scene)
+  try {
+    await built.ready
+    const before = ((built.objects.get(object.id) as THREE.Mesh).material as THREE.MeshStandardMaterial).map!
+    const next = structuredClone(scene); next.textureAssets[0].dataUrl = 'data:image/png;base64,AQ=='
+    built.reconcile(next); await built.ready
+    const after = ((built.objects.get(object.id) as THREE.Mesh).material as THREE.MeshStandardMaterial).map!
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(after.source).not.toBe(before.source)
+  } finally { built.dispose(); load.mockRestore() }
+})

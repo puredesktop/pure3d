@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { AnimationMixer, Vector3, ImageLoader } from 'three'
-import { emptyScene, makeObject } from './scene'
+import { AnimationMixer, Vector3, ImageLoader, Texture } from 'three'
+import { emptyScene, makeObject, resolveMaterial } from './scene'
 import { exportScene, disposeScene } from './threeScene'
 import { importModel } from './importModel'
 
@@ -55,7 +55,7 @@ describe('GLB round trip', () => {
     expect(mesh.geometry!.uv).toHaveLength(
       (mesh.geometry!.positions.length / 3) * 2,
     )
-    expect(mesh.material.color).toBe(object.material.color)
+    expect(mesh.material.color).toBe(resolveMaterial(scene, object).color)
     expect(mesh.material.metalness).toBe(0.8)
   })
   it('embeds base-color images and round-trips texture settings and UVs (mocked image/canvas backend)', async () => {
@@ -97,15 +97,16 @@ describe('GLB round trip', () => {
     try {
       const scene = emptyScene()
       const object = makeObject('plane')
+      scene.textureAssets = [{ id: 'image', dataUrl }]
       object.material.texture = {
-        dataUrl,
+        assetId: 'image',
         repeat: [3, 2],
         offset: [0.1, 0.2],
         rotation: 0.3,
         flipY: false,
         wrapS: 'mirror',
         wrapT: 'clamp',
-      } as never
+      }
       scene.objects.push(object)
       const exported = await exportScene(scene, 'glb', 0)
       const data = exported.data as ArrayBuffer
@@ -121,10 +122,12 @@ describe('GLB round trip', () => {
       expect(
         json.materials[0].pbrMetallicRoughness.baseColorTexture.index,
       ).toBe(0)
-      const imported = (await importModel(data, 'glb')).find(
+      const model = await importModel(data, 'glb')
+      const imported = model.find(
         o => o.kind === 'mesh',
       )!
-      expect(imported.material.texture).toEqual(object.material.texture)
+      expect(imported.material.texture).toEqual({ ...object.material.texture, assetId: expect.any(String) })
+      expect(model.textureAssets.find(asset => asset.id === imported.material.texture?.assetId)?.dataUrl).toBe(dataUrl)
       expect(imported.geometry!.uv).toHaveLength(
         (imported.geometry!.positions.length / 3) * 2,
       )
@@ -148,4 +151,35 @@ describe('GLB round trip', () => {
       vi.unstubAllGlobals()
     }
   })
+})
+
+it('excludes animated descendants of hidden groups from GLB export', async () => {
+  const scene = emptyScene(), parent = makeObject('group'), child = makeObject('box'), visible = makeObject('sphere')
+  parent.visible = false; child.parentId = parent.id
+  scene.objects = [parent, child, visible]
+  scene.keyframes = [{ objectId: child.id, property: 'position', time: 0, value: [0, 0, 0], easing: 'linear' }, { objectId: child.id, property: 'position', time: 5, value: [5, 0, 0], easing: 'linear' }]
+  const exported = await exportScene(scene, 'glb', 0)
+  const loaded = await new GLTFLoader().parseAsync(exported.data as ArrayBuffer, '')
+  expect(loaded.animations).toHaveLength(0)
+  expect(loaded.scene.getObjectByName(child.id)).toBeUndefined()
+  disposeScene(loaded.scene)
+})
+
+it('waits for hidden texture loads before releasing their export resources', async () => {
+  const scene = emptyScene(), hidden = makeObject('box'), visible = makeObject('sphere')
+  hidden.visible = false; hidden.material.texture = { assetId: 'hidden-image' }
+  scene.objects = [hidden, visible]
+  scene.textureAssets = [{ id: 'hidden-image', dataUrl: 'data:image/png;base64,AA==' }]
+  let complete!: (image: HTMLImageElement) => void
+  const loading = vi.spyOn(ImageLoader.prototype, 'load').mockImplementation((_url, onLoad) => { complete = onLoad!; return {} as HTMLImageElement })
+  const disposing = vi.spyOn(Texture.prototype, 'dispose')
+  try {
+    const exporting = exportScene(scene, 'obj', 0)
+    expect(disposing).not.toHaveBeenCalled()
+    complete({ width: 2, height: 2 } as HTMLImageElement)
+    const result = await exporting
+    expect(result.data).not.toContain(hidden.id)
+    expect(result.data).toContain(visible.id)
+    expect(disposing).toHaveBeenCalledTimes(1)
+  } finally { loading.mockRestore(); disposing.mockRestore() }
 })

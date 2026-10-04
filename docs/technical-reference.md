@@ -42,7 +42,7 @@ A `.pure3d` file contains the complete validated scene and animation as JSON.
 `useDocumentLifecycle` for durable drafts, autosave, flushes, recents and close
 handling. Content commits mark the lifecycle dirty; playback and selection do
 not. Opening flushes outgoing content before adopting the loaded document.
-Save As writes a copy through the shared filesystem helper and adopts it.
+Save As writes a copy through the shared filesystem helper and adopts it, including edits made while the copy was being written. Document open/create/save actions are ordered; a clean open does not schedule autosave. Serialization includes the live camera even if its navigation debounce has not settled.
 
 `usePlatformViewportResource` receives boot and later resource opens.
 Successful document bindings use `updateCurrentWorkspaceTab` for tab
@@ -71,7 +71,7 @@ app. The host selects the drawer session's image model, falling back to the
 app default. It creates an opaque base-color image, or edits the current one
 with `editExisting:true`, then validates and applies it through the existing
 texture workflow. The tool returns the model/provider used and saved scene
-path. It makes one generation request; other edits do not invalidate it. A save
+path. It makes one generation request; other edits in the same document do not invalidate it. Switching documents rejects a late asset result without applying it. A save
 failure leaves the applied texture in the store for `saveScene` to retry.
 `applyTexture` reuses a retained texture-library asset on explicit targets or
 their recursive subtrees, while `patchTextures` atomically bulk-patches tint
@@ -79,8 +79,7 @@ and UV/wrap settings. Non-recursive group changes are inherited by children;
 recursive changes create child-local bindings. Both return normal scene
 context with image bytes omitted.
 
-Runtime schemas in `src/lib/schemas.mjs` generate `plugin.json` via
-`scripts/manifest.mjs`; regenerate it after changing tools.
+Runtime schemas in `src/lib/schemas.mjs` and `plugin.json` describe the same tools; keep their descriptions and input schemas aligned.
 
 ## Formats and current limits
 
@@ -95,7 +94,7 @@ Export animated GLB (baked at scene FPS), OBJ/STL of the current pose, or a PNG
 of the viewport. Geometry exports exclude hidden objects and editor helpers.
 PNG captures the rendered canvas, including visible gizmos and grid.
 GLB embeds texture images; OBJ/STL exports carry geometry only. GLB export
-and viewport capture wait for image decoding.
+and viewport capture wait for image decoding. Capture refuses a scene changed during decoding and restores the active playhead pose after capturing a different time. The viewport renders on demand while idle and continuously during playback; format loaders and exporters load only when used.
 
 ## App development
 

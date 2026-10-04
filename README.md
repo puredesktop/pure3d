@@ -63,6 +63,9 @@ Follow the [development guide](docs/development.md) for Claude Code/Codex comman
 
 ## Documentation and limitations
 
+See the [reliability and performance audit](docs/reliability-audit.md) for the
+document, texture and renderer fixes, checks and remaining validation limits.
+
 | Guide | What it covers |
 | --- | --- |
 | [App guide](docs/app-guide.md) | App overview, source layout, and usage. |

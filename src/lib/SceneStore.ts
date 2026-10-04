@@ -56,6 +56,8 @@ function copyCamera(camera: CameraState): CameraState {
 }
 
 export class SceneStore {
+  private documentEpoch = 0
+  getDocumentEpoch = () => this.documentEpoch
   private state: WorkspaceState
   private camera: CameraState
   private savedCamera: CameraState
@@ -87,11 +89,12 @@ export class SceneStore {
   getWorkspaceSnapshot = () => this.state
   getCameraSnapshot = () => this.camera
   /** Returns the durable scene shape without making camera navigation an undo entry. */
-  getDocument = () => {
-    if (sameCamera(this.state.scene.settings.camera, this.savedCamera)) return this.state.scene
+  getDocument = (includeLiveCamera = false) => {
+    const camera = includeLiveCamera ? this.camera : this.savedCamera
+    if (sameCamera(this.state.scene.settings.camera, camera)) return this.state.scene
     return {
       ...this.state.scene,
-      settings: { ...this.state.scene.settings, camera: copyCamera(this.savedCamera) },
+      settings: { ...this.state.scene.settings, camera: copyCamera(camera) },
     }
   }
   subscribe = (fn: (change: SceneChange) => void) => {
@@ -182,6 +185,7 @@ export class SceneStore {
   }
   replace(scene: SceneDocument) {
     const next = parseScene(scene)
+    this.documentEpoch += 1
     this.past = []
     this.future = []
     this.camera = copyCamera(next.settings.camera)
@@ -228,6 +232,7 @@ export class SceneStore {
     }
     if ((patch.mode && patch.mode !== 'translate') || patch.playing)
       patch.selectedVertex = null
+    if (patch.time !== undefined && !Number.isFinite(patch.time)) throw new Error('Playhead time must be finite')
     if (patch.time !== undefined)
       patch.time = Math.min(
         Math.max(0, patch.time),
@@ -235,13 +240,15 @@ export class SceneStore {
       )
     if (patch.playing && this.state.time >= this.state.scene.settings.duration)
       patch.time = 0
-    this.publish(patch, {
+    const changed = Object.fromEntries(Object.entries(patch).filter(([key, value]) => this.state[key as WorkspaceAffected] !== value)) as WorkspacePatch
+    if (!Object.keys(changed).length) return
+    this.publish(changed, {
       domain: 'workspace',
-      affected: Object.keys(patch) as WorkspaceAffected[],
+      affected: Object.keys(changed) as WorkspaceAffected[],
     })
   }
   tick(delta: number) {
-    if (!this.state.playing) return
+    if (!this.state.playing || !Number.isFinite(delta) || delta <= 0) return
     let time = this.state.time + delta
     let playing = true
     if (time >= this.state.scene.settings.duration) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   applyOperations,
   emptyScene,
@@ -245,4 +245,19 @@ describe('Animation', () => {
     expect(store.getSnapshot().time).toBe(5)
     expect(store.getSnapshot().playing).toBe(false)
   })
+})
+
+it('does not publish unchanged workspace patches or invalid playback deltas', () => {
+  const store = new SceneStore(), changed = vi.fn()
+  store.subscribe(changed)
+  const original = store.getSnapshot()
+  store.workspace({ selectedId: null, time: 0, playing: false })
+  expect(store.getSnapshot()).toBe(original)
+  expect(changed).not.toHaveBeenCalled()
+  store.workspace({ playing: true })
+  changed.mockClear()
+  for (const delta of [0, -1, NaN, Infinity]) store.tick(delta)
+  expect(changed).not.toHaveBeenCalled()
+  expect(store.getSnapshot().time).toBe(0)
+  expect(() => store.workspace({ time: NaN })).toThrow('finite')
 })

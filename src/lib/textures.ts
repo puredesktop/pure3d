@@ -28,16 +28,27 @@ function configureTexture(texture: THREE.Texture, binding: TextureBinding) {
 export class TextureAssetCache {
   private entries = new Map<
     string,
-    { texture: THREE.Texture; ready: Promise<void> }
+    { texture: THREE.Texture; ready: Promise<void>; dispose: () => void; dataUrl: string }
   >()
 
   texture(asset: ImageTexture & { id: string }, binding: TextureBinding) {
-    const key = `${asset.id}:${asset.dataUrl}`
+    const key = asset.id
     let entry = this.entries.get(key)
+    if (entry && entry.dataUrl !== asset.dataUrl) {
+      entry.dispose()
+      this.entries.delete(key)
+      entry = undefined
+    }
     if (!entry) {
       const loaded = loadTexture(asset, { assetId: asset.id })
-      entry = loaded
+      entry = { ...loaded, dataUrl: asset.dataUrl }
       this.entries.set(key, entry)
+      void entry.ready.catch(() => {
+        if (this.entries.get(key) === entry) {
+          this.entries.delete(key)
+          entry!.dispose()
+        }
+      })
     }
     const texture = entry.texture.clone()
     configureTexture(texture, binding)
@@ -46,13 +57,10 @@ export class TextureAssetCache {
 
   /** Drop decoded sources that no longer belong to the reconciled document. */
   retain(assets: readonly (ImageTexture & { id: string })[]) {
-    const active = new Set(assets.map(asset => `${asset.id}:${asset.dataUrl}`))
+    const active = new Map(assets.map(asset => [asset.id, asset.dataUrl]))
     for (const [key, entry] of this.entries)
-      if (!active.has(key)) {
-        entry.texture.dispose()
-        const image = entry.texture.image
-        if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap)
-          image.close()
+      if (active.get(key) !== entry.dataUrl) {
+        entry.dispose()
         this.entries.delete(key)
       }
   }
@@ -64,11 +72,19 @@ export class TextureAssetCache {
 
 export function loadTexture(value: ImageTexture, binding: TextureBinding) {
   const texture = new THREE.Texture()
+  let disposed = false
+  let cancel!: (reason: Error) => void
+  const closeImage = (image: unknown) => {
+    if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) image.close()
+  }
   const ready = new Promise<void>((resolve, reject) => {
+    cancel = reject
     new THREE.ImageLoader().load(
       value.dataUrl,
       image => {
+        if (disposed) { closeImage(image); return }
         if (image.width > 8192 || image.height > 8192) {
+          closeImage(image)
           reject(new Error('Textures must be at most 8192 pixels per side'))
         } else {
           texture.image = image
@@ -81,7 +97,13 @@ export function loadTexture(value: ImageTexture, binding: TextureBinding) {
     )
   })
   configureTexture(texture, binding)
-  return { texture, ready }
+  return { texture, ready, dispose: () => {
+    if (disposed) return
+    disposed = true
+    cancel(new Error('Texture load cancelled'))
+    closeImage(texture.image)
+    texture.dispose()
+  } }
 }
 
 export async function validateTexture(dataUrl: string): Promise<string> {
@@ -90,7 +112,7 @@ export async function validateTexture(dataUrl: string): Promise<string> {
   try {
     await loaded.ready
   } finally {
-    loaded.texture.dispose()
+    loaded.dispose()
   }
   return value.dataUrl
 }

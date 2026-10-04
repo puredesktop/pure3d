@@ -108,10 +108,10 @@ describe('Scene document integration with the shared lifecycle', () => {
     expect(documents.autosavePlatformDocument).not.toHaveBeenCalled()
     const object = makeObject()
     object.material.texture = {
-      dataUrl: 'data:image/png;base64,AQID',
+      assetId: 'test-image',
       repeat: [2, 3],
-    } as never
-    await act(async () => store.edit([{ op: 'add', object }]))
+    }
+    await act(async () => store.edit([{ op: 'addTextureAsset', asset: { id: 'test-image', dataUrl: 'data:image/png;base64,AQID' } }, { op: 'add', object }]))
     await settle()
     expect(documents.createPlatformDraft).toHaveBeenCalledTimes(1)
     expect(documents.createPlatformDraft.mock.calls[0]![0]).toMatchObject({
@@ -228,4 +228,45 @@ describe('Scene document integration with the shared lifecycle', () => {
       documents.autosavePlatformDocument.mock.invocationCallOrder[0],
     ).toBeLessThan(events.bridge.call.mock.invocationCallOrder[0]!)
   })
+  it('flushes the live camera when closed before its persistence debounce settles', async () => {
+    await act(async () => latest.lifecycle.adopt('/Scene.pure3d'))
+    await act(async () => store.setCamera({ position: [12, 8, 10], target: [2, 0, 0] }))
+    await act(async () => events.handlers.get(E.WORKSPACE_WILL_CLOSE)!({ requestId: 'camera-close' }))
+    await settle()
+    expect(JSON.parse(documents.autosavePlatformDocument.mock.calls[0]![0].files[0].content).settings.camera).toEqual({ position: [12, 8, 10], target: [2, 0, 0] })
+  })
+
+  it('orders overlapping opens so a slow older read cannot replace the newer document', async () => {
+    const one = emptyScene('First'), two = emptyScene('Second')
+    let release!: (value: string) => void
+    files.readPlatformTextFile.mockImplementationOnce(() => new Promise<string>(resolve => { release = resolve })).mockResolvedValueOnce(JSON.stringify(two))
+    let first!: Promise<string>, second!: Promise<string>
+    await act(async () => { first = latest.open('/First.pure3d'); second = latest.open('/Second.pure3d') })
+    expect(files.readPlatformTextFile).toHaveBeenCalledTimes(1)
+    await act(async () => { release(JSON.stringify(one)); await first; await second })
+    expect(store.getSnapshot().scene.id).toBe(two.id)
+    expect(latest.doc.path).toBe('/Second.pure3d')
+  })
+
+  it('saves edits made during Save As to the new binding before reporting completion', async () => {
+    await act(async () => latest.lifecycle.adopt('/Old.pure3d'))
+    let release!: () => void
+    files.writePlatformTextFile.mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve }))
+    let saving!: Promise<string>
+    await act(async () => { saving = latest.save('/Copy.pure3d') })
+    await act(async () => store.edit([{ op: 'add', object: makeObject('cone') }]))
+    await act(async () => { release(); await saving })
+    const saved = documents.autosavePlatformDocument.mock.calls.find(([request]) => request.path === '/Copy.pure3d')![0]
+    expect(JSON.parse(saved.files[0].content).objects[0].kind).toBe('cone')
+    expect(latest.doc.path).toBe('/Copy.pure3d')
+  })
+
+  it('does not let a failed open poison the following queued document action', async () => {
+    const incoming = emptyScene('Good')
+    files.readPlatformTextFile.mockRejectedValueOnce(new Error('Read failed')).mockResolvedValueOnce(JSON.stringify(incoming))
+    await act(async () => { await expect(latest.open('/Broken.pure3d')).rejects.toThrow('Read failed'); await latest.open('/Good.pure3d') })
+    expect(store.getSnapshot().scene.id).toBe(incoming.id)
+    expect(latest.doc.path).toBe('/Good.pure3d')
+  })
+
 })
