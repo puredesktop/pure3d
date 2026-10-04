@@ -36,13 +36,13 @@
       {
         "id": "3d-scene",
         "label": "3D scene",
-        "description": "Create an empty 3D scene.",
+        "description": "Create a starter 3D scene with editable primitive shapes.",
         "appSlug": "3d",
         "defaultName": "Untitled scene",
         "kind": "file",
         "extension": "pure3d",
         "fileNameSuffix": ".pure3d",
-        "template": "{\"format\":\"pure3d\",\"version\":1,\"id\":\"new\",\"title\":\"Untitled scene\",\"objects\":[],\"keyframes\":[],\"settings\":{\"duration\":5,\"fps\":30,\"background\":\"#e9edf2\",\"grid\":true,\"camera\":{\"position\":[6,4,7],\"target\":[0,0,0]}}}"
+        "template": "{\"format\":\"pure3d\",\"version\":1,\"id\":\"new\",\"title\":\"Untitled scene\",\"textureAssets\":[],\"objects\":[{\"id\":\"starter-ground\",\"name\":\"Ground plane\",\"kind\":\"plane\",\"parentId\":null,\"visible\":true,\"transform\":{\"position\":[0,-0.02,0],\"rotation\":[-1.5707963267948966,0,0],\"scale\":[7,7,7]},\"material\":{\"color\":\"#d9e1eb\",\"metalness\":0,\"roughness\":0.9},\"geometry\":null},{\"id\":\"starter-plinth\",\"name\":\"Display plinth\",\"kind\":\"cylinder\",\"parentId\":null,\"visible\":true,\"transform\":{\"position\":[0,0.25,0],\"rotation\":[0,0,0],\"scale\":[1.5,0.25,1.5]},\"material\":{\"color\":\"#24334a\",\"metalness\":0.65,\"roughness\":0.22},\"geometry\":null},{\"id\":\"starter-sphere\",\"name\":\"Blue sphere\",\"kind\":\"sphere\",\"parentId\":null,\"visible\":true,\"transform\":{\"position\":[0,1.25,0],\"rotation\":[0,0,0],\"scale\":[0.9,0.9,0.9]},\"material\":{\"color\":\"#4f8cff\",\"metalness\":0.3,\"roughness\":0.2},\"geometry\":null},{\"id\":\"starter-torus\",\"name\":\"Orbit ring\",\"kind\":\"torus\",\"parentId\":null,\"visible\":true,\"transform\":{\"position\":[0,1.25,0],\"rotation\":[0.65,0.25,0],\"scale\":[1.15,1.15,1.15]},\"material\":{\"color\":\"#f4b942\",\"metalness\":0.8,\"roughness\":0.18},\"geometry\":null},{\"id\":\"starter-cube\",\"name\":\"Coral cube\",\"kind\":\"box\",\"parentId\":null,\"visible\":true,\"transform\":{\"position\":[-2,0.55,-0.6],\"rotation\":[0.2,0.45,0],\"scale\":[0.65,0.65,0.65]},\"material\":{\"color\":\"#f06c68\",\"metalness\":0.15,\"roughness\":0.32},\"geometry\":null},{\"id\":\"starter-cone\",\"name\":\"Mint cone\",\"kind\":\"cone\",\"parentId\":null,\"visible\":true,\"transform\":{\"position\":[2,0.65,0.45],\"rotation\":[0,0,0],\"scale\":[0.7,0.7,0.7]},\"material\":{\"color\":\"#46b9a2\",\"metalness\":0.35,\"roughness\":0.28},\"geometry\":null}],\"keyframes\":[],\"settings\":{\"duration\":5,\"fps\":30,\"background\":\"#e9edf2\",\"grid\":true,\"camera\":{\"position\":[7,4.5,8],\"target\":[0,1,0]}}}"
       }
     ],
     "agents": {
@@ -1093,7 +1093,7 @@
         },
         {
           "name": "newScene",
-          "description": "Save the current scene before creating a blank scene. Optional title. Returns the new scene and saved path. No seeded objects.",
+          "description": "Save the current scene before creating a starter 3D scene with editable primitive shapes. Optional title. Returns the new scene and saved path.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {

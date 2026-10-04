@@ -6,7 +6,7 @@ import {
   writePlatformTextFile,
 } from '../bridge/platformBridge'
 import type { SceneStore } from '../lib/SceneStore'
-import { emptyScene, parseScene } from '../lib/scene'
+import { starterScene, parseScene } from '../lib/scene'
 
 export interface SceneDocumentActions {
   doc: DocumentLifecycleDoc
@@ -107,7 +107,7 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
       store.persistCamera()
       await flush({ throwOnError: true })
       reset()
-      store.replace(emptyScene(title))
+      store.replace(starterScene(title))
       // Deliberately creating a new document also gives its tab a durable binding.
       return save()
     },
