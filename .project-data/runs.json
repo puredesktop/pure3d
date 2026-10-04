@@ -8,5 +8,17 @@
       "7cd1668c-d22a-4a3c-ae5a-b1e822f0583e"
     ],
     "title": "Existing app baseline"
+  },
+  {
+    "createdAt": "2026-10-04T19:50:52.876Z",
+    "id": "e1cfe1bf-3603-488b-bd79-013b3ea97f43",
+    "origin": "factory",
+    "request": "Summary: make this gray bg to be dark blue and light skyblue, depending on the theme\n\nDetails: make this gray bg to be dark blue and light skyblue, depending on the theme\n\nThe attached image was captured from the live app in Factory. Use its marks and note as visual evidence.\n\nAdd what this asks for to the product requirements document as a numbered requirement, then implement it.",
+    "taskIds": [
+      "e1cfe1bf-3603-488b-bd79-013b3ea97f43"
+    ],
+    "title": "Theme-aware gray background: dark blue/light sky blue and PRD requirement",
+    "devSessionId": "262673a2-3841-4b0f-8eb9-27ea80271dc2",
+    "devRequestId": "e1cfe1bf-3603-488b-bd79-013b3ea97f43"
   }
 ]

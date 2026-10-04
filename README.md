@@ -69,6 +69,7 @@ document, texture and renderer fixes, checks and remaining validation limits.
 | Guide | What it covers |
 | --- | --- |
 | [App guide](docs/app-guide.md) | App overview, source layout, and usage. |
+| [Product requirements](docs/product-requirements.md) | Numbered product requirements for current behavior. |
 | [Development guide](docs/development.md) | External coding tools, purefactory, checks, and installation. |
 | [Agent guide](agents.md) | App-specific agent workflows and constraints. |
 | [Agent contribution skill](.agents/skills/contribute-pure3d/SKILL.md) | Clone or fork, implement and check changes, open PRs, create issues, and comment. |

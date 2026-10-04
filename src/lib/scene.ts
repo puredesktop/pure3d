@@ -7,6 +7,7 @@ import type {
   Keyframe,
   Vec3,
 } from '../types'
+import { DEFAULT_SCENE_BACKGROUND } from './viewportTheme'
 
 export type ResolvedMaterial = {
   color: string
@@ -104,7 +105,7 @@ export function emptyScene(title = 'Untitled scene'): SceneDocument {
     settings: {
       duration: 5,
       fps: 30,
-      background: '#e9edf2',
+      background: DEFAULT_SCENE_BACKGROUND,
       grid: true,
       camera: { position: [6, 4, 7], target: [0, 0, 0] },
     },
