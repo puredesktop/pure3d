@@ -12,8 +12,9 @@
     "title": "Seed empty scenes with 3D showcase elements",
     "details": "The user asks to make empty scenes start with a 3D scene containing a few elements and shapes to showcase the app's capabilities.",
     "scope": "app",
-    "status": "running",
+    "status": "done",
     "devSessionId": "a34d3ab3-c6a4-42f8-a397-1758c723259a",
-    "devRequestId": "cd0f1ef0-0887-48ba-910a-ae3066ec8da5"
+    "devRequestId": "cd0f1ef0-0887-48ba-910a-ae3066ec8da5",
+    "commitHash": "f35e75a89d56e749f8e0ba95015f562c4e38ad63"
   }
 ]
