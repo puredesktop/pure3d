@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "createdAt": "2026-10-04T23:51:14.678Z",
+    "id": "f7cb923c-ae6a-4153-b17e-6cb28c6db13e",
+    "origin": "factory",
+    "request": "Initial build plan",
+    "taskIds": [
+      "6da95adb-7aff-4e0e-aa44-cd7c50c275aa"
+    ],
+    "title": "Existing app baseline"
+  },
+  {
+    "createdAt": "2026-10-04T23:53:19.786Z",
+    "id": "cd0f1ef0-0887-48ba-910a-ae3066ec8da5",
+    "origin": "app",
+    "request": "make the empty scenes to start with a 3d scene, a couple elements and shapes, to showcase the app capabilities",
+    "taskIds": [
+      "cd0f1ef0-0887-48ba-910a-ae3066ec8da5"
+    ],
+    "title": "Seed empty scenes with 3D showcase elements",
+    "devSessionId": "a34d3ab3-c6a4-42f8-a397-1758c723259a",
+    "devRequestId": "cd0f1ef0-0887-48ba-910a-ae3066ec8da5"
+  }
+]

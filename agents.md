@@ -62,7 +62,8 @@ Async imports and texture generation refuse to apply results after the active do
 All content mutations edit the active scene and save automatically. `saveScene`
 without a path saves the active document or creates a draft. With a
 path it writes a `.pure3d` copy and makes that the active document. `newScene`
-and `openScene` save outgoing content first. Use paths returned by tools.
+creates a starter composition with editable primitive shapes, and `openScene`
+saves outgoing content first. Use paths returned by tools.
 
 Import static OBJ/STL or self-contained GLB. GLB retains base-color image
 textures and primary UVs; other maps, skeletal rigs, morphs and imported clips

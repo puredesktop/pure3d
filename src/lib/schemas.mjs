@@ -320,7 +320,7 @@ export const toolDefinitions = {
       .strict(),
   ),
   newScene: tool(
-    'Save the current scene before creating a blank scene. Optional title. Returns the new scene and saved path. No seeded objects.',
+    'Save the current scene before creating a starter 3D scene with editable primitive shapes. Optional title. Returns the new scene and saved path.',
     z.object({ title: z.string().min(1).max(200).optional() }).strict(),
   ),
   openScene: tool(

@@ -110,6 +110,51 @@ export function emptyScene(title = 'Untitled scene'): SceneDocument {
     },
   }
 }
+/** A small, editable composition that makes a new workspace immediately useful. */
+export function starterScene(title = 'Untitled scene'): SceneDocument {
+  const scene = emptyScene(title)
+  const object = (
+    kind: SceneObject['kind'],
+    name: string,
+    position: Vec3,
+    scale: Vec3,
+    material: SceneObject['material'],
+    rotation: Vec3 = [0, 0, 0],
+  ) => ({
+    ...makeObject(kind, name),
+    transform: { position, rotation, scale },
+    material,
+  })
+  scene.objects = [
+    object(
+      'plane', 'Ground plane', [0, -0.02, 0], [7, 7, 7],
+      { color: '#d9e1eb', metalness: 0, roughness: 0.9 },
+      [-Math.PI / 2, 0, 0],
+    ),
+    object(
+      'cylinder', 'Display plinth', [0, 0.25, 0], [1.5, 0.25, 1.5],
+      { color: '#24334a', metalness: 0.65, roughness: 0.22 },
+    ),
+    object(
+      'sphere', 'Blue sphere', [0, 1.25, 0], [0.9, 0.9, 0.9],
+      { color: '#4f8cff', metalness: 0.3, roughness: 0.2 },
+    ),
+    object(
+      'torus', 'Orbit ring', [0, 1.25, 0], [1.15, 1.15, 1.15],
+      { color: '#f4b942', metalness: 0.8, roughness: 0.18 }, [0.65, 0.25, 0],
+    ),
+    object(
+      'box', 'Coral cube', [-2, 0.55, -0.6], [0.65, 0.65, 0.65],
+      { color: '#f06c68', metalness: 0.15, roughness: 0.32 }, [0.2, 0.45, 0],
+    ),
+    object(
+      'cone', 'Mint cone', [2, 0.65, 0.45], [0.7, 0.7, 0.7],
+      { color: '#46b9a2', metalness: 0.35, roughness: 0.28 },
+    ),
+  ]
+  scene.settings.camera = { position: [7, 4.5, 8], target: [0, 1, 0] }
+  return scene
+}
 export function parseScene(value: unknown): SceneDocument {
   const scene = sceneSchema.parse(migrateScene(value))
   if (scene.id === 'new') scene.id = crypto.randomUUID()

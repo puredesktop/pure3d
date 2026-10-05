@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": "6da95adb-7aff-4e0e-aa44-cd7c50c275aa",
+    "title": "Existing app baseline",
+    "scope": "app",
+    "status": "done",
+    "details": "Existing app source at commit d8a56bf0b4e804895a40503f1ad719d05c51bf3a.",
+    "commitHash": "80f628bd7ec17614e7d83c765d9a855185f1bb08"
+  },
+  {
+    "id": "cd0f1ef0-0887-48ba-910a-ae3066ec8da5",
+    "title": "Seed empty scenes with 3D showcase elements",
+    "details": "The user asks to make empty scenes start with a 3D scene containing a few elements and shapes to showcase the app's capabilities.",
+    "scope": "app",
+    "status": "done",
+    "devSessionId": "a34d3ab3-c6a4-42f8-a397-1758c723259a",
+    "devRequestId": "cd0f1ef0-0887-48ba-910a-ae3066ec8da5",
+    "commitHash": "f35e75a89d56e749f8e0ba95015f562c4e38ad63"
+  }
+]
