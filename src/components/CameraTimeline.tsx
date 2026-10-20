@@ -5,6 +5,7 @@ import { Choice, NumberField } from './Controls'
 import { useSceneState } from '../hooks/useSceneState'
 import type { SceneStore } from '../lib/SceneStore'
 import { cameraPose } from '../lib/cameraTrack'
+import { agentRefs } from '../lib/agentRefs'
 
 export function CameraTimeline({ store, run }: { store: SceneStore; run: (fn: () => unknown) => void }) {
   const state = useSceneState(store, ['scene', 'time', 'cameraPreview', 'camera'])
@@ -28,7 +29,7 @@ export function CameraTimeline({ store, run }: { store: SceneStore; run: (fn: ()
       <ToolbarControl title="Remove camera keyframe" aria-label="Remove camera keyframe" disabled={!current} onClick={() => run(() => store.edit([{ op: 'removeCameraKeyframe', time }]))}><Trash2 size={14} /></ToolbarControl>
     </div>
     <div className="timeline-lane"><span className="lane-label">Shot</span><div className="key-track" style={{ '--playhead': `${state.time / state.scene.settings.duration * 100}%` } as React.CSSProperties}>
-      {keys.map(k => <button key={k.time} className="keyframe" aria-label={`Camera keyframe at ${k.time}s`} aria-pressed={current === k} title={`${k.time}s · ${k.easing}`} style={{ left: `${k.time / state.scene.settings.duration * 100}%` }} onClick={() => store.workspace({ time: k.time, playing: false, cameraPreview: true })}><Diamond size={12} fill="currentColor" /></button>)}
+      {keys.map(k => <button key={k.time} {...agentRefs({ time: k.time }, `Camera keyframe at ${k.time}s`)} className="keyframe" aria-label={`Camera keyframe at ${k.time}s`} aria-pressed={current === k} title={`${k.time}s · ${k.easing}`} style={{ left: `${k.time / state.scene.settings.duration * 100}%` }} onClick={() => store.workspace({ time: k.time, playing: false, cameraPreview: true })}><Diamond size={12} fill="currentColor" /></button>)}
     </div></div>
   </div>
 }
