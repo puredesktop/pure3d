@@ -88,6 +88,11 @@ export class SceneStore {
   getContentSnapshot = () => this.state.scene
   getWorkspaceSnapshot = () => this.state
   getCameraSnapshot = () => this.camera
+  /** Read-only undo/redo stacks (oldest first), for describing history. */
+  getHistory = () => ({
+    past: this.past as readonly SceneDocument[],
+    future: this.future as readonly SceneDocument[],
+  })
   /** Returns the durable scene shape without making camera navigation an undo entry. */
   getDocument = (includeLiveCamera = false) => {
     const camera = includeLiveCamera ? this.camera : this.savedCamera

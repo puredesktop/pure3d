@@ -76,8 +76,20 @@ failure leaves the applied texture in the store for `saveScene` to retry.
 `applyTexture` reuses a retained texture-library asset on explicit targets or
 their recursive subtrees, while `patchTextures` atomically bulk-patches tint
 and UV/wrap settings. Non-recursive group changes are inherited by children;
-recursive changes create child-local bindings. Both return normal scene
-context with image bytes omitted.
+recursive changes create child-local bindings. Both return the affected
+object IDs and a change summary.
+
+Tool replies are compact so long assistant sessions stay within model
+context. `getScene` is the only tool that returns scene detail: without
+arguments it is the complete read it has always been, and its optional
+`ids`/`includeDescendants`, `kinds`, `name`, `within`, `geometry`, `limit`
+and `summary` arguments narrow it (`src/lib/toolReplies.ts`). Change tools
+reply with `ok`, the saved path, a scene header and a diff of the store's
+scene before and after the call (object IDs capped at 25 per list with a
+remainder count, keyframe/camera-key counts, texture asset IDs, changed
+settings keys). `history` also lists one-line descriptions of the nearest
+undo and redo entries, and `captureViewport` returns its image with a
+one-line note. Replies never change the document format or bridge calls.
 
 Runtime schemas in `src/lib/schemas.mjs` and `plugin.json` describe the same tools; keep their descriptions and input schemas aligned.
 
