@@ -76,6 +76,7 @@ import { createToolHandlers, useAppAgentTools } from '../hooks/useAppAgentTools'
 import { useSceneDocument } from '../hooks/useSceneDocument'
 import type { ResourceOpenEvent } from '@purescience/platform-ui/bridge/types'
 import type { SceneObject } from '../types'
+import { agentRefs, objectRefs } from '../lib/agentRefs'
 
 const SHAPES = [
   'box',
@@ -511,7 +512,10 @@ export function Workspace({
             <span>Click to select · drag to orbit</span>
           </div>
         </aside>
-        <div className="viewport-slot">
+        <div
+          className="viewport-slot"
+          {...agentRefs({ path: doc.path }, state.scene.title.trim() || 'Scene')}
+        >
           <SceneViewport store={store} api={viewport} onError={onError} />
           {!state.scene.objects.length && (
             <div className="empty-scene">
@@ -620,6 +624,7 @@ const OutlineRows = memo(function OutlineRows({ store }: { store: SceneStore }) 
         return (
           <div key={object.id}>
             <SidebarRow
+              {...objectRefs(object.id, object.name)}
               className="object-row"
               aria-current={state.selectedId === object.id ? 'true' : undefined}
               style={{ paddingLeft: 12 + depth * 14 }}

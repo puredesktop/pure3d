@@ -13,6 +13,7 @@ import { MaterialInspector } from './MaterialInspector'
 import type { SceneStore, WorkspaceState } from '../lib/SceneStore'
 import type { SceneObject, Vec3, Operation } from '../types'
 import { useSceneState } from '../hooks/useSceneState'
+import { objectRefs } from '../lib/agentRefs'
 
 const INSPECTOR_STATE = ['scene', 'selectedId', 'selectedVertex', 'time'] as const
 
@@ -31,7 +32,10 @@ export function Inspector({
   )
   const edit = (ops: Operation[]) => run(() => store.edit(ops))
   return (
-    <aside className="inspector">
+    <aside
+      className="inspector"
+      {...(object ? objectRefs(object.id, object.name) : {})}
+    >
       <div className="panel-heading">
         <SidebarSectionLabel>{object ? 'Object' : 'Scene'}</SidebarSectionLabel>
         <ToolbarControl
