@@ -5,6 +5,7 @@ import { SceneStore } from '../lib/SceneStore'
 import { emptyScene, makeObject } from '../lib/scene'
 import type { ViewportAPI } from '../components/SceneViewport'
 import type { SceneObject } from '../types'
+import { BLANK_CAPTURE_MESSAGE } from '../lib/captureCheck'
 import {
   readPlatformFileBinaryDataUrl,
   readPlatformTextFile,
@@ -228,6 +229,12 @@ describe('Agent tool replies', () => {
     expect(reply.images).toEqual([{ mimeType: 'image/png', data: 'AQID' }])
     expect(json).toMatchObject({ ok: true, time: 0, note: expect.stringContaining('Rendered') })
     expect(reply.content).not.toContain('objects')
+  })
+
+  it('reports an undrawn viewport as an error, with no image', async () => {
+    const { call, viewport } = setup()
+    vi.mocked(viewport.current!.capture).mockRejectedValue(new Error(BLANK_CAPTURE_MESSAGE))
+    await expect(call('captureViewport')).rejects.toThrow("The viewport isn't drawn")
   })
 
   it('opens and saves with a header and a capped outline', async () => {

@@ -1482,7 +1482,7 @@
         },
         {
           "name": "captureViewport",
-          "description": "Read an actual rendered viewport PNG of the active scene at the current playhead. Refuses if the renderer is unavailable. Returns the image with a one-line note (title, playhead time); use getScene for scene data.",
+          "description": "Read an actual rendered viewport PNG of the active scene at the current playhead. Draws a fresh frame first, at the on-screen size or, while Pure3D is hidden, at its last known size (1280x720 if never shown). Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the viewport cannot be drawn (unsized canvas or fully transparent pixels); capture again once Pure3D is on screen, or use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data.",
           "risk": "read",
           "requiresApproval": false,
           "requiresCapabilities": [

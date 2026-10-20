@@ -403,7 +403,7 @@ export const toolDefinitions = {
     z.object({ direction: z.enum(['undo', 'redo']) }).strict(),
   ),
   captureViewport: tool(
-    'Read an actual rendered viewport PNG of the active scene at the current playhead. Refuses if the renderer is unavailable. Returns the image with a one-line note (title, playhead time); use getScene for scene data.',
+    'Read an actual rendered viewport PNG of the active scene at the current playhead. Draws a fresh frame first, at the on-screen size or, while Pure3D is hidden, at its last known size (1280x720 if never shown). Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the viewport cannot be drawn (unsized canvas or fully transparent pixels); capture again once Pure3D is on screen, or use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data.',
     z.object({}).strict(),
     'read',
     { requiresCapabilities: ['vision'] },

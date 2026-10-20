@@ -20,7 +20,10 @@ at 25 entries; `addedMore`, `updatedMore`, `removedMore` (and
 the rest. `setWorkspace` returns the workspace state and the selected object;
 `openScene` adds an outline of the first 20 objects; `history` describes the
 step it undid or redid and the next five undo and redo entries;
-`captureViewport` returns the image with a one-line note.
+`captureViewport` returns the image with a one-line note. It draws a fresh
+frame first, even while Pure3D's tab is hidden; if the viewport still cannot be
+drawn it returns an error and no image instead of a blank picture. Capture again
+once Pure3D is on screen, or read the scene with `getScene`.
 
 Read only what the next step needs. `getScene` with no arguments returns the
 whole scene, which is large on real scenes. On anything beyond a few objects,

@@ -106,7 +106,7 @@ Export animated GLB (baked at scene FPS), OBJ/STL of the current pose, or a PNG
 of the viewport. Geometry exports exclude hidden objects and editor helpers.
 PNG captures the rendered canvas, including visible gizmos and grid.
 GLB embeds texture images; OBJ/STL exports carry geometry only. GLB export
-and viewport capture wait for image decoding. Capture refuses a scene changed during decoding and restores the active playhead pose after capturing a different time. The viewport renders on demand while idle and continuously during playback; format loaders and exporters load only when used.
+and viewport capture wait for image decoding. Capture refuses a scene changed during decoding and restores the active playhead pose after capturing a different time. It always draws a fresh frame, sizing the buffer to the on-screen viewport or, while hidden, to its last known size (1280x720 if it was never shown), and refuses a blank result (default 300x150 canvas or fully transparent pixels) instead of returning it. The viewport renders on demand while idle and continuously during playback; format loaders and exporters load only when used.
 
 ## App development
 
