@@ -17,6 +17,19 @@ import {
   applyTextureReference,
   patchTextureReferences,
 } from '../lib/workflows'
+import {
+  cameraReply,
+  cappedIds,
+  changesReply,
+  diffScenes,
+  historyEntries,
+  isEmptyQuery,
+  queryScene,
+  sceneHeader,
+  sceneOutline,
+  workspaceState,
+} from '../lib/toolReplies'
+import type { SceneDocument } from '../types'
 
 type ToolName = keyof typeof toolDefinitions
 type ToolArgs<N extends ToolName> = z.infer<
@@ -59,83 +72,131 @@ export function createToolHandlers(
         toolDefinitions[name].schema.parse(invoke.arguments) as ToolArgs<N>,
       )
     }
+  /** Save, then describe what changed since `before` — never the whole scene. */
+  const committed = async (before: SceneDocument, extra: Record<string, unknown> = {}) => {
+    const path = await document.save()
+    const state = store.getSnapshot()
+    const changes = changesReply(diffScenes(before, state.scene))
+    return result({
+      ok: true,
+      path,
+      scene: sceneHeader(state.scene),
+      ...extra,
+      changes,
+      ...(Object.keys(changes).length ? {} : { note: 'No scene content changed' }),
+      canUndo: state.canUndo,
+      canRedo: state.canRedo,
+    })
+  }
+  const opened = (path: string | null) => {
+    const { scene } = store.getSnapshot()
+    return result({ ok: true, path, scene: sceneHeader(scene), ...sceneOutline(scene) })
+  }
+  const current = () => store.getSnapshot().scene
   return {
-    getScene: bind('getScene', async () => result(context())),
+    getScene: bind('getScene', async args => {
+      if (isEmptyQuery(args)) return result(context())
+      const { scene: _scene, ...extra } = context()
+      return result(queryScene(store.getSnapshot(), args, extra))
+    }),
     editScene: bind('editScene', async args => {
+      const before = current()
       store.edit(args.operations)
-      const path = await document.save()
-      return result({ ...context(), path })
+      return committed(before, { operations: args.operations.length })
     }),
     setWorkspace: bind('setWorkspace', async args => {
       const { frameSelection, ...patch } = args
       if (frameSelection && !viewport.current)
         throw new Error('Viewport renderer unavailable')
       store.workspace(patch)
+      let saved: Record<string, unknown> = {}
       if (frameSelection) {
         viewport.current!.frame()
         const path = await document.save()
-        return result({ ...context(), path })
+        saved = { path, camera: cameraReply(store.getCameraSnapshot()) }
       }
-      return result(context())
+      const state = store.getSnapshot()
+      const selected = state.scene.objects.find(o => o.id === state.selectedId)
+      return result({
+        ok: true,
+        workspace: workspaceState(state),
+        ...(selected
+          ? { selected: { id: selected.id, name: selected.name, kind: selected.kind } }
+          : {}),
+        ...saved,
+      })
     }),
-    newScene: bind('newScene', async args => {
-      const path = await document.create(args.title)
-      return result({ ...context(), path })
-    }),
-    openScene: bind('openScene', async args => {
-      const path = await document.open(args.path)
-      return result({ ...context(), path })
-    }),
+    newScene: bind('newScene', async args => opened(await document.create(args.title))),
+    openScene: bind('openScene', async args => opened(await document.open(args.path))),
     saveScene: bind('saveScene', async args => {
       const path = await document.save(args.path)
-      return result({ ...context(), path })
+      return result({ ok: true, path, scene: sceneHeader(current()) })
     }),
     importModel: bind('importModel', async args => {
+      const before = current()
       const objectIds = await importWorkspaceModel(store, args.path)
-      const path = await document.save()
-      return result({ ...context(), path, importedObjectIds: objectIds })
+      return committed(before, {
+        ...cappedIds('importedObjectIds', objectIds),
+        selectedId: store.getSnapshot().selectedId,
+      })
     }),
     importTexture: bind('importTexture', async args => {
+      const before = current()
       const textureAssetId = await importWorkspaceTexture(store, args.id, args.path)
-      const path = await document.save()
-      return result({ ...context(), path, textureAssetId })
+      return committed(before, { objectId: args.id, textureAssetId })
     }),
     generateTexture: bind('generateTexture', async args => {
+      const before = current()
       const generated = await generateObjectTexture(store, args.id, args)
-      const path = await document.save()
-      return result({ ...context(), path, ...generated })
+      return committed(before, { objectId: args.id, ...generated })
     }),
     applyTexture: bind('applyTexture', async args => {
+      const before = current()
       const appliedObjectIds = applyTextureReference(store, args)
-      const path = await document.save()
-      return result({ ...context(), path, appliedObjectIds })
+      return committed(before, {
+        assetId: args.assetId,
+        ...cappedIds('appliedObjectIds', appliedObjectIds),
+      })
     }),
     patchTextures: bind('patchTextures', async args => {
+      const before = current()
       const patchedObjectIds = patchTextureReferences(store, args)
-      const path = await document.save()
-      return result({ ...context(), path, patchedObjectIds })
+      return committed(before, cappedIds('patchedObjectIds', patchedObjectIds))
     }),
     exportModel: bind('exportModel', async args => {
-      return result(
-        await exportWorkspaceModel(
+      return result({
+        ok: true,
+        format: args.format,
+        ...(await exportWorkspaceModel(
           store,
           args.path,
           args.format,
           viewport.current,
-        ),
-      )
+        )),
+      })
     }),
     history: bind('history', async args => {
+      const before = current()
       store.history(args.direction)
-      const path = await document.save()
-      return result({ ...context(), path })
+      const { past, future } = store.getHistory()
+      return committed(before, {
+        direction: args.direction,
+        ...historyEntries(current(), past, future),
+      })
     }),
     captureViewport: bind('captureViewport', async () => {
       if (!viewport.current) throw new Error('Viewport renderer unavailable')
       const snapshot = store.getSnapshot()
       const image = await viewport.current.capture(snapshot.time)
       return {
-        ...result({ ...context(), time: snapshot.time }),
+        ...result({
+          ok: true,
+          note: `Rendered viewport PNG of "${snapshot.scene.title}" at ${snapshot.time} s${
+            snapshot.cameraPreview ? ' through the camera track' : ''
+          }.`,
+          time: snapshot.time,
+          path: document.doc.path,
+        }),
         images: [
           {
             mimeType: 'image/png',

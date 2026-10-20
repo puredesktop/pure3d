@@ -291,12 +291,23 @@ const tool = (description, schema, risk = 'write', extra = {}) => ({
 })
 export const toolDefinitions = {
   getScene: tool(
-    'Read the active scene, file path, selection and playback. Embedded texture dataUrl bytes are omitted; texture settings remain visible. Rotations are XYZ Euler radians, time is seconds, positions use meters. Objects are box/sphere/cylinder/cone/torus/plane/group/mesh; primitives have unit size.',
-    z.object({}).strict(),
+    'Read the active scene, file path, selection and playback. This is the only tool that returns scene detail: change tools reply with a short summary (ids, counts, path), so read here only what the next step needs. With no arguments it returns the complete scene. Narrow it with ids (includeDescendants:true adds each subtree), kinds, name (case-insensitive substring) and within (axis-aligned box tested against each object\'s world-space origin from its saved transforms, ignoring animation); filters combine with AND, keyframes are limited to the returned objects, and match reports counts and unknown ids. geometry:false replaces mesh arrays with vertex/triangle counts. summary:true returns counts by kind, settings, texture asset ids and an outline of id/name/kind/parentId per object instead of full objects (default limit 200; limit caps the returned objects in either mode and objectsMore reports the rest). Prefer summary:true or filters on large scenes. Embedded texture dataUrl bytes are always omitted. Rotations are XYZ Euler radians, time is seconds, positions use meters. Objects are box/sphere/cylinder/cone/torus/plane/group/mesh; primitives have unit size.',
+    z
+      .object({
+        ids: z.array(z.string().min(1)).min(1).max(1000).optional(),
+        includeDescendants: z.boolean().optional(),
+        kinds: z.array(shapeSchema).min(1).max(8).optional(),
+        name: z.string().min(1).max(200).optional(),
+        within: z.object({ min: vectorSchema, max: vectorSchema }).strict().optional(),
+        summary: z.boolean().optional(),
+        geometry: z.boolean().optional(),
+        limit: z.number().int().min(1).max(1000).optional(),
+      })
+      .strict(),
     'read',
   ),
   editScene: tool(
-    'Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings. Preserve unrelated objects, object keyframes and textures when editing camera shots.',
+    'Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings. Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.',
     z
       .object({
         operations: z.array(operationSchema).min(1).max(200),
@@ -304,7 +315,7 @@ export const toolDefinitions = {
       .strict(),
   ),
   setWorkspace: tool(
-    'Operate selection, transform mode, playback, playhead, looping, inspector visibility, cameraPreview or frame selection. cameraPreview:true uses the animated camera track at the playhead, with clean 16:9 framing; false restores the editing camera. Combine cameraPreview:true, time:0, playing:true to play a camera journey. Preview does not rewrite the saved shots or object animation. selectedVertex selects a mesh vertex and pauses playback; null returns to object mode. Changing objects, rotating/scaling or playing exits vertex mode. Framing saves the editing camera; selection, preview and scrubbing are transient.',
+    'Operate selection, transform mode, playback, playhead, looping, inspector visibility, cameraPreview or frame selection. cameraPreview:true uses the animated camera track at the playhead, with clean 16:9 framing; false restores the editing camera. Combine cameraPreview:true, time:0, playing:true to play a camera journey. Preview does not rewrite the saved shots or object animation. selectedVertex selects a mesh vertex and pauses playback; null returns to object mode. Changing objects, rotating/scaling or playing exits vertex mode. Framing saves the editing camera; selection, preview and scrubbing are transient. Replies with the resulting workspace state and the selected object id/name/kind; framing also returns the saved path and camera.',
     z
       .object({
         selectedId: z.string().nullable().optional(),
@@ -320,27 +331,27 @@ export const toolDefinitions = {
       .strict(),
   ),
   newScene: tool(
-    'Save the current scene before creating a blank scene. Optional title. Returns the new scene and saved path. No seeded objects.',
+    'Save the current scene before creating a blank scene. Optional title. Returns the saved path and scene header (id, title, counts). No seeded objects.',
     z.object({ title: z.string().min(1).max(200).optional() }).strict(),
   ),
   openScene: tool(
-    'Save the current scene, then open a .pure3d document from a workspace path. Parse failures leave the current scene untouched.',
+    'Save the current scene, then open a .pure3d document from a workspace path. Parse failures leave the current scene untouched. Returns the path, scene header (id, title, counts) and an outline of the first 20 objects (id/name/kind); use getScene for detail.',
     z.object({ path: z.string().min(1) }).strict(),
   ),
   saveScene: tool(
-    'Save the active scene. Optional path writes a .pure3d copy there and makes it the active document; otherwise saves to its current path or creates a draft. Returns its saved path.',
+    'Save the active scene. Optional path writes a .pure3d copy there and makes it the active document; otherwise saves to its current path or creates a draft. Returns its saved path and scene header.',
     z.object({ path: z.string().min(1).optional() }).strict(),
   ),
   importModel: tool(
-    'Add static geometry from an OBJ, STL or self-contained GLB workspace file. OBJ material sidecars are unsupported. GLB supports base-color image textures and UVs; other texture maps, skins, morph targets and existing animation clips are refused. Imported meshes retain hierarchy and base color/PBR values.',
+    'Add static geometry from an OBJ, STL or self-contained GLB workspace file. OBJ material sidecars are unsupported. GLB supports base-color image textures and UVs; other texture maps, skins, morph targets and existing animation clips are refused. Imported meshes retain hierarchy and base color/PBR values. Returns importedObjectIds (capped at 25, importedObjectIdsMore counts the rest) and a change summary.',
     z.object({ path: z.string().min(1) }).strict(),
   ),
   importTexture: tool(
-    'Apply a workspace PNG, JPEG or WebP image (up to 8 MiB) as an object base-color texture, embedded in the scene. Resets base color to white and supplies box UVs for meshes without UVs. Adjust tint and tiling with editScene material fields. Group textures are inherited by children unless they have a local texture override.',
+    'Apply a workspace PNG, JPEG or WebP image (up to 8 MiB) as an object base-color texture, embedded in the scene. Resets base color to white and supplies box UVs for meshes without UVs. Adjust tint and tiling with editScene material fields. Group textures are inherited by children unless they have a local texture override. Returns textureAssetId and a change summary.',
     z.object({ id: z.string(), path: z.string().min(1) }).strict(),
   ),
   generateTexture: tool(
-    'Generate and apply an object base-color texture in the active scene using the drawer image model (or app default). Describe flat, unlit surface color/detail; request seamless edges for tiling. Defaults to square 1024x1024, medium quality, opaque PNG. editExisting=true sends the current texture as an image-editing source; requires an editing-capable image model. Embeds the result with undo and saving, resets base color to white, preserves tiling, and supplies missing mesh UVs. Group textures are inherited by children unless they have a local texture override. Makes one generation request; never automatically repeat a failed paid call. If saving fails after application, use saveScene to retry saving.',
+    'Generate and apply an object base-color texture in the active scene using the drawer image model (or app default). Describe flat, unlit surface color/detail; request seamless edges for tiling. Defaults to square 1024x1024, medium quality, opaque PNG. editExisting=true sends the current texture as an image-editing source; requires an editing-capable image model. Embeds the result with undo and saving, resets base color to white, preserves tiling, and supplies missing mesh UVs. Group textures are inherited by children unless they have a local texture override. Makes one generation request; never automatically repeat a failed paid call. If saving fails after application, use saveScene to retry saving. Returns assetId, modelId, provider and a change summary.',
     z
       .object({
         id: z.string(),
@@ -354,13 +365,13 @@ export const toolDefinitions = {
     'external',
   ),
   applyTexture: tool(
-    'Apply a retained texture-library asset by assetId to explicit object IDs. Set recursive:true to create a local binding on every object in each target subtree; otherwise a group binding is inherited by children unless a child already has its own texture override. All asset and target IDs are validated before the scene changes. Referenced texture bindings preserve each target\'s existing UV settings and textured meshes without UVs receive box-projected UVs. Returns scene context without embedded texture bytes.',
+    'Apply a retained texture-library asset by assetId to explicit object IDs. Set recursive:true to create a local binding on every object in each target subtree; otherwise a group binding is inherited by children unless a child already has its own texture override. All asset and target IDs are validated before the scene changes. Referenced texture bindings preserve each target\'s existing UV settings and textured meshes without UVs receive box-projected UVs. Returns appliedObjectIds and a change summary.',
     textureTargetSchema
       .extend({ assetId: z.string().min(1) })
       .strict(),
   ),
   patchTextures: tool(
-    'Atomically patch tint/base color and/or texture repeat, offset, rotation, flipY, wrapS and wrapT on explicit object IDs. Set recursive:true to give every object in each target subtree a local patched material; otherwise a group patch is inherited and child overrides remain intact. UV texture settings require a resolved texture on every target. Textured meshes without UVs receive box-projected UVs. Returns scene context without embedded texture bytes.',
+    'Atomically patch tint/base color and/or texture repeat, offset, rotation, flipY, wrapS and wrapT on explicit object IDs. Set recursive:true to give every object in each target subtree a local patched material; otherwise a group patch is inherited and child overrides remain intact. UV texture settings require a resolved texture on every target. Textured meshes without UVs receive box-projected UVs. Returns patchedObjectIds and a change summary.',
     textureTargetSchema
       .extend({
         patch: z
@@ -388,11 +399,11 @@ export const toolDefinitions = {
       .strict(),
   ),
   history: tool(
-    'Undo or redo one edit in the active scene. Returns the complete scene context.',
+    'Undo or redo one edit in the active scene. Returns what that step changed (object ids, counts), canUndo/canRedo, undoSteps/redoSteps, and one-line descriptions of the next five undo and redo entries, nearest first.',
     z.object({ direction: z.enum(['undo', 'redo']) }).strict(),
   ),
   captureViewport: tool(
-    'Read an actual rendered viewport PNG of the active scene at the current playhead. Refuses if the renderer is unavailable.',
+    'Read an actual rendered viewport PNG of the active scene at the current playhead. Draws a fresh frame first, at the on-screen size or, while Pure3D is hidden, at its last known size (1280x720 if never shown). Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the viewport cannot be drawn (unsized canvas or fully transparent pixels); capture again once Pure3D is on screen, or use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data.',
     z.object({}).strict(),
     'read',
     { requiresCapabilities: ['vision'] },
