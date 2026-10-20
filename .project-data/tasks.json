@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": "7cd1668c-d22a-4a3c-ae5a-b1e822f0583e",
+    "title": "Existing app baseline",
+    "scope": "app",
+    "status": "done",
+    "details": "Existing app source at commit d8a56bf0b4e804895a40503f1ad719d05c51bf3a.",
+    "commitHash": "bf83ee93d1609b78eb3c46a9ce8470065118ab84"
+  },
+  {
+    "id": "e1cfe1bf-3603-488b-bd79-013b3ea97f43",
+    "title": "Theme-aware gray background: dark blue/light sky blue and PRD requirement",
+    "details": "The user asks to change the gray background to dark blue or light sky blue depending on the theme, add this as a numbered requirement in the product requirements document, and implement it.",
+    "scope": "app",
+    "status": "done",
+    "devSessionId": "262673a2-3841-4b0f-8eb9-27ea80271dc2",
+    "devRequestId": "e1cfe1bf-3603-488b-bd79-013b3ea97f43",
+    "commitHash": "260ab6efd788e83153a5edfda43c99e09ecbe765"
+  }
+]

@@ -38,6 +38,8 @@ const runFrame = async () => { await act(async () => { const callbacks = [...job
 beforeEach(() => {
   vi.clearAllMocks(); jobs = new Map(); sequence = 0; rendered.sizable = true
   decoded.pixels.mockResolvedValue(new Uint8ClampedArray([21, 21, 21, 255]))
+  delete document.documentElement.dataset.platformTheme
+  delete document.documentElement.dataset.platformAppearance
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   vi.stubGlobal('devicePixelRatio', 1)
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { jobs.set(++sequence, callback); return sequence })
@@ -60,6 +62,18 @@ it('draws once while idle, redraws for an edit and leaves no perpetual animation
   await runFrame()
   expect(rendered.draw).toHaveBeenCalledTimes(2)
   expect(jobs.size).toBe(0)
+})
+it('updates the default viewport background when the platform theme changes', async () => {
+  document.documentElement.dataset.platformTheme = 'dark'
+  await mount(); await runFrame()
+  let renderedScene = rendered.draw.mock.calls.at(-1)![0] as THREE.Scene
+  expect(renderedScene.background).toMatchObject({ r: expect.any(Number) })
+  expect((renderedScene.background as THREE.Color).getHexString()).toBe('0d2a52')
+  document.documentElement.dataset.platformTheme = 'light'
+  await act(async () => { await Promise.resolve() })
+  await runFrame()
+  renderedScene = rendered.draw.mock.calls.at(-1)![0] as THREE.Scene
+  expect((renderedScene.background as THREE.Color).getHexString()).toBe('bfe9ff')
 })
 it('rejects capture when the scene changes while textures are loading', async () => {
   let complete!: (image: HTMLImageElement) => void
