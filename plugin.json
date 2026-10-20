@@ -49,19 +49,104 @@
       "tools": [
         {
           "name": "getScene",
-          "description": "Read the active scene, file path, selection and playback. Embedded texture dataUrl bytes are omitted; texture settings remain visible. Rotations are XYZ Euler radians, time is seconds, positions use meters. Objects are box/sphere/cylinder/cone/torus/plane/group/mesh; primitives have unit size.",
+          "description": "Read the active scene, file path, selection and playback. This is the only tool that returns scene detail: change tools reply with a short summary (ids, counts, path), so read here only what the next step needs. With no arguments it returns the complete scene. Narrow it with ids (includeDescendants:true adds each subtree), kinds, name (case-insensitive substring) and within (axis-aligned box tested against each object's world-space origin from its saved transforms, ignoring animation); filters combine with AND, keyframes are limited to the returned objects, and match reports counts and unknown ids. geometry:false replaces mesh arrays with vertex/triangle counts. summary:true returns counts by kind, settings, texture asset ids and an outline of id/name/kind/parentId per object instead of full objects (default limit 200; limit caps the returned objects in either mode and objectsMore reports the rest). Prefer summary:true or filters on large scenes. Embedded texture dataUrl bytes are always omitted. Rotations are XYZ Euler radians, time is seconds, positions use meters. Objects are box/sphere/cylinder/cone/torus/plane/group/mesh; primitives have unit size.",
           "risk": "read",
           "requiresApproval": false,
           "inputSchema": {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
-            "properties": {},
+            "properties": {
+              "ids": {
+                "minItems": 1,
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "includeDescendants": {
+                "type": "boolean"
+              },
+              "kinds": {
+                "minItems": 1,
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "box",
+                    "sphere",
+                    "cylinder",
+                    "cone",
+                    "torus",
+                    "plane",
+                    "group",
+                    "mesh"
+                  ]
+                }
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "within": {
+                "type": "object",
+                "properties": {
+                  "min": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  },
+                  "max": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "min",
+                  "max"
+                ],
+                "additionalProperties": false
+              },
+              "summary": {
+                "type": "boolean"
+              },
+              "geometry": {
+                "type": "boolean"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            },
             "additionalProperties": false
           }
         },
         {
           "name": "editScene",
-          "description": "Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings. Preserve unrelated objects, object keyframes and textures when editing camera shots.",
+          "description": "Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings. Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1031,7 +1116,7 @@
         },
         {
           "name": "setWorkspace",
-          "description": "Operate selection, transform mode, playback, playhead, looping, inspector visibility, cameraPreview or frame selection. cameraPreview:true uses the animated camera track at the playhead, with clean 16:9 framing; false restores the editing camera. Combine cameraPreview:true, time:0, playing:true to play a camera journey. Preview does not rewrite the saved shots or object animation. selectedVertex selects a mesh vertex and pauses playback; null returns to object mode. Changing objects, rotating/scaling or playing exits vertex mode. Framing saves the editing camera; selection, preview and scrubbing are transient.",
+          "description": "Operate selection, transform mode, playback, playhead, looping, inspector visibility, cameraPreview or frame selection. cameraPreview:true uses the animated camera track at the playhead, with clean 16:9 framing; false restores the editing camera. Combine cameraPreview:true, time:0, playing:true to play a camera journey. Preview does not rewrite the saved shots or object animation. selectedVertex selects a mesh vertex and pauses playback; null returns to object mode. Changing objects, rotating/scaling or playing exits vertex mode. Framing saves the editing camera; selection, preview and scrubbing are transient. Replies with the resulting workspace state and the selected object id/name/kind; framing also returns the saved path and camera.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1093,7 +1178,7 @@
         },
         {
           "name": "newScene",
-          "description": "Save the current scene before creating a starter 3D scene with editable primitive shapes. Optional title. Returns the new scene and saved path.",
+          "description": "Save the current scene before creating a starter 3D scene with editable primitive shapes. Optional title. Returns the saved path and scene header (id, title, counts).",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1111,7 +1196,7 @@
         },
         {
           "name": "openScene",
-          "description": "Save the current scene, then open a .pure3d document from a workspace path. Parse failures leave the current scene untouched.",
+          "description": "Save the current scene, then open a .pure3d document from a workspace path. Parse failures leave the current scene untouched. Returns the path, scene header (id, title, counts) and an outline of the first 20 objects (id/name/kind); use getScene for detail.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1131,7 +1216,7 @@
         },
         {
           "name": "saveScene",
-          "description": "Save the active scene. Optional path writes a .pure3d copy there and makes it the active document; otherwise saves to its current path or creates a draft. Returns its saved path.",
+          "description": "Save the active scene. Optional path writes a .pure3d copy there and makes it the active document; otherwise saves to its current path or creates a draft. Returns its saved path and scene header.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1148,7 +1233,7 @@
         },
         {
           "name": "importModel",
-          "description": "Add static geometry from an OBJ, STL or self-contained GLB workspace file. OBJ material sidecars are unsupported. GLB supports base-color image textures and UVs; other texture maps, skins, morph targets and existing animation clips are refused. Imported meshes retain hierarchy and base color/PBR values.",
+          "description": "Add static geometry from an OBJ, STL or self-contained GLB workspace file. OBJ material sidecars are unsupported. GLB supports base-color image textures and UVs; other texture maps, skins, morph targets and existing animation clips are refused. Imported meshes retain hierarchy and base color/PBR values. Returns importedObjectIds (capped at 25, importedObjectIdsMore counts the rest) and a change summary.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1168,7 +1253,7 @@
         },
         {
           "name": "importTexture",
-          "description": "Apply a workspace PNG, JPEG or WebP image (up to 8 MiB) as an object base-color texture, embedded in the scene. Resets base color to white and supplies box UVs for meshes without UVs. Adjust tint and tiling with editScene material fields. Group textures are inherited by children unless they have a local texture override.",
+          "description": "Apply a workspace PNG, JPEG or WebP image (up to 8 MiB) as an object base-color texture, embedded in the scene. Resets base color to white and supplies box UVs for meshes without UVs. Adjust tint and tiling with editScene material fields. Group textures are inherited by children unless they have a local texture override. Returns textureAssetId and a change summary.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1192,7 +1277,7 @@
         },
         {
           "name": "generateTexture",
-          "description": "Generate and apply an object base-color texture in the active scene using the drawer image model (or app default). Describe flat, unlit surface color/detail; request seamless edges for tiling. Defaults to square 1024x1024, medium quality, opaque PNG. editExisting=true sends the current texture as an image-editing source; requires an editing-capable image model. Embeds the result with undo and saving, resets base color to white, preserves tiling, and supplies missing mesh UVs. Group textures are inherited by children unless they have a local texture override. Makes one generation request; never automatically repeat a failed paid call. If saving fails after application, use saveScene to retry saving.",
+          "description": "Generate and apply an object base-color texture in the active scene using the drawer image model (or app default). Describe flat, unlit surface color/detail; request seamless edges for tiling. Defaults to square 1024x1024, medium quality, opaque PNG. editExisting=true sends the current texture as an image-editing source; requires an editing-capable image model. Embeds the result with undo and saving, resets base color to white, preserves tiling, and supplies missing mesh UVs. Group textures are inherited by children unless they have a local texture override. Makes one generation request; never automatically repeat a failed paid call. If saving fails after application, use saveScene to retry saving. Returns assetId, modelId, provider and a change summary.",
           "risk": "external",
           "requiresApproval": false,
           "inputSchema": {
@@ -1228,7 +1313,7 @@
         },
         {
           "name": "applyTexture",
-          "description": "Apply a retained texture-library asset by assetId to explicit object IDs. Set recursive:true to create a local binding on every object in each target subtree; otherwise a group binding is inherited by children unless a child already has its own texture override. All asset and target IDs are validated before the scene changes. Referenced texture bindings preserve each target's existing UV settings and textured meshes without UVs receive box-projected UVs. Returns scene context without embedded texture bytes.",
+          "description": "Apply a retained texture-library asset by assetId to explicit object IDs. Set recursive:true to create a local binding on every object in each target subtree; otherwise a group binding is inherited by children unless a child already has its own texture override. All asset and target IDs are validated before the scene changes. Referenced texture bindings preserve each target's existing UV settings and textured meshes without UVs receive box-projected UVs. Returns appliedObjectIds and a change summary.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1261,7 +1346,7 @@
         },
         {
           "name": "patchTextures",
-          "description": "Atomically patch tint/base color and/or texture repeat, offset, rotation, flipY, wrapS and wrapT on explicit object IDs. Set recursive:true to give every object in each target subtree a local patched material; otherwise a group patch is inherited and child overrides remain intact. UV texture settings require a resolved texture on every target. Textured meshes without UVs receive box-projected UVs. Returns scene context without embedded texture bytes.",
+          "description": "Atomically patch tint/base color and/or texture repeat, offset, rotation, flipY, wrapS and wrapT on explicit object IDs. Set recursive:true to give every object in each target subtree a local patched material; otherwise a group patch is inherited and child overrides remain intact. UV texture settings require a resolved texture on every target. Textured meshes without UVs receive box-projected UVs. Returns patchedObjectIds and a change summary.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1374,7 +1459,7 @@
         },
         {
           "name": "history",
-          "description": "Undo or redo one edit in the active scene. Returns the complete scene context.",
+          "description": "Undo or redo one edit in the active scene. Returns what that step changed (object ids, counts), canUndo/canRedo, undoSteps/redoSteps, and one-line descriptions of the next five undo and redo entries, nearest first.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1397,7 +1482,7 @@
         },
         {
           "name": "captureViewport",
-          "description": "Read an actual rendered viewport PNG of the active scene at the current playhead. Refuses if the renderer is unavailable.",
+          "description": "Read an actual rendered viewport PNG of the active scene at the current playhead. Draws a fresh frame first, at the on-screen size or, while Pure3D is hidden, at its last known size (1280x720 if never shown). Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the viewport cannot be drawn (unsized canvas or fully transparent pixels); capture again once Pure3D is on screen, or use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data.",
           "risk": "read",
           "requiresApproval": false,
           "requiresCapabilities": [

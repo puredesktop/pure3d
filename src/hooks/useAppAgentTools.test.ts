@@ -185,7 +185,8 @@ describe('Assistant surface', () => {
       expect(
         store.getSnapshot().scene.textureAssets.find(asset => asset.id === store.getSnapshot().scene.objects[0].material.texture?.assetId)?.dataUrl,
       ).toBe(dataUrl)
-      expect(context.scene.objects[0].material.texture.dataUrl).toBeUndefined()
+      expect(context).toMatchObject({ ok: true, objectId: object.id, textureAssetId: expect.any(String), changes: { updated: [object.id] } })
+      expect(JSON.stringify(context)).not.toContain('base64')
       expect(document.save).toHaveBeenCalledTimes(1)
       await invoke('setWorkspace', {
         selectedId: object.id,
@@ -234,7 +235,8 @@ describe('Assistant surface', () => {
         provider: generated.provider,
         path: '/Drafts/Scene.pure3d',
       })
-      expect(result.scene.objects[0].material.texture.dataUrl).toBeUndefined()
+      expect(result).toMatchObject({ assetId: expect.any(String), changes: { updated: [object.id] } })
+      expect(JSON.stringify(result)).not.toContain('base64')
       expect(store.getSnapshot().scene.objects[0].material).toMatchObject({
         texture: { assetId: expect.any(String) },
         color: '#ffffff',
@@ -406,7 +408,8 @@ describe('Assistant surface', () => {
       ).content,
     )
     expect(applied.appliedObjectIds).toEqual([group.id])
-    expect(applied.scene.textureAssets[0].dataUrl).toBeUndefined()
+    expect(applied).toMatchObject({ ok: true, assetId: 'stone', changes: { updated: [group.id] } })
+    expect(JSON.stringify(applied)).not.toContain('base64')
     expect(store.getSnapshot().scene.objects[0].material.texture).toEqual({
       assetId: 'stone',
     })

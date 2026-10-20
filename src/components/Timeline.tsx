@@ -8,6 +8,7 @@ import { pose } from '../lib/scene'
 import type { SceneStore } from '../lib/SceneStore'
 import { useSceneState } from '../hooks/useSceneState'
 import { CameraTimeline } from './CameraTimeline'
+import { agentRefs } from '../lib/agentRefs'
 
 const TIMELINE_STATE = ['scene', 'selectedId', 'time', 'playing', 'loop', 'cameraPreview'] as const
 
@@ -150,6 +151,10 @@ export function Timeline({
                   .filter(k => k.property === property)
                   .map(k => (
                     <button
+                      {...agentRefs(
+                        { time: k.time },
+                        `${object?.name ?? 'Object'} · ${property} keyframe at ${k.time}s`,
+                      )}
                       className="keyframe"
                       aria-label={`${property} keyframe at ${k.time}s`}
                       title={`${k.time.toFixed(2)}s · ${k.easing}`}

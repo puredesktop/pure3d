@@ -6,6 +6,37 @@ consecutive edits do not require rereading the scene. Objects use
 unit-size primitive geometry, meter positions, XYZ Euler rotations in radians,
 and positive scales. Keyframe times are seconds.
 
+## Replies and reading the scene
+
+Only `3d.getScene` returns scene detail. Every change tool (`editScene`,
+`setWorkspace`, `newScene`, `openScene`, `saveScene`, `importModel`,
+`importTexture`, `generateTexture`, `applyTexture`, `patchTextures`,
+`history`) replies with a short summary: `ok`, the saved `path`, a scene
+header (id, title, object/keyframe/camera-key/texture counts, duration) and
+`changes` listing added, updated and removed object IDs, keyframe and
+camera-key counts, texture asset IDs and changed settings keys. ID lists stop
+at 25 entries; `addedMore`, `updatedMore`, `removedMore` (and
+`importedObjectIdsMore`, `appliedObjectIdsMore`, `patchedObjectIdsMore`) count
+the rest. `setWorkspace` returns the workspace state and the selected object;
+`openScene` adds an outline of the first 20 objects; `history` describes the
+step it undid or redid and the next five undo and redo entries;
+`captureViewport` returns the image with a one-line note. It draws a fresh
+frame first, even while Pure3D's tab is hidden; if the viewport still cannot be
+drawn it returns an error and no image instead of a blank picture. Capture again
+once Pure3D is on screen, or read the scene with `getScene`.
+
+Read only what the next step needs. `getScene` with no arguments returns the
+whole scene, which is large on real scenes. On anything beyond a few objects,
+start with `summary:true` (counts by kind, settings, texture asset IDs and an
+id/name/kind/parentId outline, 200 objects by default) and then read full
+objects with filters: `ids` (plus `includeDescendants:true` for a subtree),
+`kinds`, `name` (case-insensitive substring) or `within` (`{min, max}` box
+tested against each object's world-space origin from its saved transforms).
+Filters combine; keyframes are limited to the returned objects; `match`
+reports counts and unknown IDs. `geometry:false` replaces mesh arrays with
+vertex and triangle counts, and `limit` caps the returned objects
+(`objectsMore` counts the rest).
+
 `3d.editScene` validates and commits operations atomically. Add objects with
 unique IDs, a full transform and material, and `geometry: null` for primitives
 and groups. Meshes require triangle positions, indices (or null), and optional

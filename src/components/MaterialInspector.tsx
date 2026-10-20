@@ -15,6 +15,7 @@ import {
 import type { SceneStore } from '../lib/SceneStore'
 import type { SceneObject, Operation } from '../types'
 import { resolveMaterial } from '../lib/scene'
+import { textureRefs } from '../lib/agentRefs'
 
 const wrapOptions = [
   { value: 'repeat', label: 'Repeat' },
@@ -152,6 +153,7 @@ export function MaterialInspector({
       <div className="row texture-controls">
         {texture && (
           <img
+            {...(texture ? textureRefs(texture.assetId) : {})}
             className="texture-preview"
             src={asset?.dataUrl}
             alt="Base-color texture"
@@ -183,6 +185,7 @@ export function MaterialInspector({
             scene.textureAssets.map(libraryAsset => (
               <button
                 key={libraryAsset.id}
+                {...textureRefs(libraryAsset.id)}
                 type="button"
                 className="texture-library-item"
                 aria-pressed={texture?.assetId === libraryAsset.id}

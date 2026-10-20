@@ -14,6 +14,17 @@ import { VertexHandles } from '../lib/VertexHandles'
 import type { Vec3 } from '../types'
 import { demandRenderer } from '../lib/demandRenderer'
 import { cameraPose } from '../lib/cameraTrack'
+import {
+  platformViewportTheme,
+  resolveViewportBackground,
+  type ViewportTheme,
+} from '../lib/viewportTheme'
+import {
+  BLANK_CAPTURE_MESSAGE,
+  FALLBACK_CAPTURE_SIZE,
+  decodeCapturePixels,
+  isBlankCapture,
+} from '../lib/captureCheck'
 
 export interface ViewportAPI {
   capture: (time?: number) => Promise<string>
@@ -82,10 +93,20 @@ export const SceneViewport = memo(function SceneViewport({
     let selectedId: string | null = null
     let vertices: VertexHandles | null = null
     let cameraSignature = ''
+    let viewportTheme: ViewportTheme = platformViewportTheme()
     let invalidate = () => {}
-    const renderView = () => {
+    type Size = { width: number; height: number }
+    let lastSize: Size | null = null
+    /** The on-screen size, remembered so a hidden viewport can still be captured. */
+    const viewSize = (): Size | null => {
       const width = element.clientWidth, height = element.clientHeight
-      if (!width || !height) return
+      if (!width || !height) return null
+      lastSize = { width, height }
+      return lastSize
+    }
+    const renderView = (size: Size | null = viewSize()) => {
+      if (!size) return
+      const { width, height } = size
       const preview = store.getSnapshot().cameraPreview
       const w = preview ? Math.min(width, height * 16 / 9) : width
       const h = preview ? w * 9 / 16 : height
@@ -150,7 +171,9 @@ export const SceneViewport = memo(function SceneViewport({
         cameraSignature = signature
         orbit.update()
       }
-      scene.background = new THREE.Color(document.settings.background)
+      scene.background = new THREE.Color(
+        resolveViewportBackground(document.settings.background, viewportTheme),
+      )
       orbit.enabled = !state.cameraPreview
       grid.visible = document.settings.grid && !state.cameraPreview
       axes.visible = document.settings.grid && !state.cameraPreview
@@ -196,6 +219,16 @@ export const SceneViewport = memo(function SceneViewport({
     const unsubscribeContent = store.subscribeContent(refresh)
     const unsubscribeWorkspace = store.subscribeWorkspace(refresh)
     const unsubscribeCamera = store.subscribeCamera(refresh)
+    const themeObserver = new MutationObserver(() => {
+      const nextTheme = platformViewportTheme()
+      if (nextTheme === viewportTheme) return
+      viewportTheme = nextTheme
+      refresh()
+    })
+    themeObserver.observe(globalThis.document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-platform-theme', 'data-platform-appearance'],
+    })
     refresh()
     gizmo.addEventListener('dragging-changed', e => {
       orbit.enabled = !e.value
@@ -318,11 +351,23 @@ export const SceneViewport = memo(function SceneViewport({
         }
         orbit.update()
         box?.update()
-        renderView()
-        try { return renderer.domElement.toDataURL('image/png') } finally {
+        // Draw a fresh frame at the on-screen size, or, while the tab is hidden,
+        // at the last known (or a fixed) size, so the buffer is never stale.
+        const size = viewSize() ?? lastSize ?? FALLBACK_CAPTURE_SIZE
+        const buffer = renderer.getSize(new THREE.Vector2())
+        if (buffer.x !== size.width || buffer.y !== size.height)
+          renderer.setSize(size.width, size.height, false)
+        let image: string
+        try {
+          renderView(size)
+          image = renderer.domElement.toDataURL('image/png')
+        } finally {
           updatePose(document, built.objects, store.getSnapshot().time)
           cameraSignature = ''; refresh()
         }
+        if (await isBlankCapture(renderer.domElement, image, decodeCapturePixels))
+          throw new Error(BLANK_CAPTURE_MESSAGE)
+        return image
       },
       frame: () => {
         const state = store.getSnapshot()
@@ -376,6 +421,7 @@ export const SceneViewport = memo(function SceneViewport({
       unsubscribeContent()
       unsubscribeWorkspace()
       unsubscribeCamera()
+      themeObserver.disconnect()
       if (cameraPersistTimeout !== undefined)
         window.clearTimeout(cameraPersistTimeout)
       resize.disconnect()
