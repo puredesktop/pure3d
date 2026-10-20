@@ -18,6 +18,9 @@ export function agentRefs(values: Record<string, string | number | undefined | n
   return props
 }
 
+/** Adds `@open`, the ref the layer marks when a write names no tagged element: the app's one main working surface. */
+export const withOpen = (props: AgentRefProps): AgentRefProps => ({ ...props, 'data-agent-ref': `${props['data-agent-ref']} @open`.trim() })
+
 /**
  * A scene object. editScene ops name it `id` (update, delete, duplicate, mesh, moveVertex…) or `objectId`
  * (removeKeyframe); getScene takes `ids`; applyTexture/patchTextures take `objectIds`; setWorkspace `selectedId`.
