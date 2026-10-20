@@ -76,7 +76,7 @@ import { createToolHandlers, useAppAgentTools } from '../hooks/useAppAgentTools'
 import { useSceneDocument } from '../hooks/useSceneDocument'
 import type { ResourceOpenEvent } from '@purescience/platform-ui/bridge/types'
 import type { SceneObject } from '../types'
-import { agentRefs, objectRefs } from '../lib/agentRefs'
+import { agentRefs, objectRefs, withOpen } from '../lib/agentRefs'
 
 const SHAPES = [
   'box',
@@ -514,7 +514,7 @@ export function Workspace({
         </aside>
         <div
           className="viewport-slot"
-          {...agentRefs({ path: doc.path }, state.scene.title.trim() || 'Scene')}
+          {...withOpen(agentRefs({ path: doc.path }, state.scene.title.trim() || 'Scene'))}
         >
           <SceneViewport store={store} api={viewport} onError={onError} />
           {!state.scene.objects.length && (
