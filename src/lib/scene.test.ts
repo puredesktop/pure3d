@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applyOperations,
   emptyScene,
+  starterScene,
   makeObject,
   parseScene,
   pose,
@@ -10,8 +11,24 @@ import {
 } from './scene'
 import { SceneStore } from './SceneStore'
 import { geometrySchema } from './schemas.mjs'
+import manifest from '../../plugin.json'
 
 describe('Scene transactions', () => {
+  it('creates a polished, editable starter composition', () => {
+    const scene = starterScene()
+    expect(scene.objects.map(object => object.kind)).toEqual([
+      'plane', 'cylinder', 'sphere', 'torus', 'box', 'cone',
+    ])
+    expect(scene.objects.every(object => object.geometry === null)).toBe(true)
+    expect(scene.objects.every(object => object.material.color)).toBe(true)
+    expect(parseScene(scene)).toEqual(scene)
+  })
+  it('keeps the desktop creation template aligned with the starter scene', () => {
+    const template = parseScene(JSON.parse(manifest.app.createEntities[0].template))
+    expect(template.objects.map(object => object.kind)).toEqual([
+      'plane', 'cylinder', 'sphere', 'torus', 'box', 'cone',
+    ])
+  })
   it('refuses a broken hierarchy without changing the original document', () => {
     const scene = emptyScene()
     const object = makeObject()

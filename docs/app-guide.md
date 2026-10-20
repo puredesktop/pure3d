@@ -13,7 +13,7 @@ A 3D workspace for creating scenes, editing geometry and materials, and animatin
 
 ## Working with pure3d
 
-1. Create or open a model, then select objects in the scene to edit their transforms and materials.
+1. New scenes open with an editable starter composition: a ground plane, plinth, sphere, torus, cube and cone. Select any object to edit its transforms and materials, or delete the examples to begin your own model.
 2. Use the animation timeline to add and adjust keyframes.
 3. Save the editable project as `.pure3d`; use the app’s import/export controls for interchange formats such as OBJ, STL, and GLB.
 

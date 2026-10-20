@@ -56,7 +56,7 @@ import { VideoExport } from './VideoExport'
 import { SceneViewport, type ViewportAPI } from './SceneViewport'
 import type { SceneStore } from '../lib/SceneStore'
 import { useSceneState } from '../hooks/useSceneState'
-import { emptyScene, makeObject, parseScene } from '../lib/scene'
+import { starterScene, makeObject, parseScene } from '../lib/scene'
 import { importModel } from '../lib/importModel'
 import {
   importWorkspaceModel,
@@ -277,7 +277,7 @@ export function Workspace({
       setSwitcherOpen(false)
       if (standalone) {
         lifecycle.reset()
-        store.replace(emptyScene())
+        store.replace(starterScene())
       } else await createScene()
     })
   useDocumentHotkeys({
@@ -315,7 +315,7 @@ export function Workspace({
       if (bound) lifecycle.reset()
       try {
         await deletePlatformFile(item.path)
-        if (bound) store.replace(emptyScene())
+        if (bound) store.replace(starterScene())
       } catch (error) {
         if (bound) lifecycle.adopt(item.path)
         throw error
