@@ -77,6 +77,7 @@ import { useSceneDocument } from '../hooks/useSceneDocument'
 import type { ResourceOpenEvent } from '@purescience/platform-ui/bridge/types'
 import type { SceneObject } from '../types'
 import { agentRefs, objectRefs, withOpen } from '../lib/agentRefs'
+import { handleWorkspaceHotkey } from '../lib/workspaceHotkeys'
 
 const SHAPES = [
   'box',
@@ -244,31 +245,8 @@ export function Workspace({
     }
   }, [resource, clearResource, openPath, onError])
   useEffect(() => {
-    const hotkey = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLElement && event.target.closest('[role="dialog"]')) return
-      const editing =
-        event.target instanceof HTMLElement &&
-        (event.target.matches('input, textarea') ||
-          event.target.isContentEditable)
-      const command = event.ctrlKey || event.metaKey
-      if (editing) return
-      const current = store.getSnapshot()
-      if (command && event.key.toLowerCase() === 'z') {
-        event.preventDefault()
-        run(() => store.history(event.shiftKey ? 'redo' : 'undo'))
-      } else if (event.code === 'Space') {
-        event.preventDefault()
-        store.workspace({ playing: !current.playing })
-      } else if (event.key.toLowerCase() === 'f') viewport.current?.frame()
-      else if (event.key.toLowerCase() === 'w')
-        store.workspace({ mode: 'translate' })
-      else if (event.key.toLowerCase() === 'e')
-        store.workspace({ mode: 'rotate' })
-      else if (event.key.toLowerCase() === 'r')
-        store.workspace({ mode: 'scale' })
-      else if (event.key === 'Delete' && current.selectedId)
-        run(() => store.edit([{ op: 'delete', id: current.selectedId }]))
-    }
+    const hotkey = (event: KeyboardEvent) =>
+      handleWorkspaceHotkey(event, store, viewport.current, run)
     window.addEventListener('keydown', hotkey)
     return () => window.removeEventListener('keydown', hotkey)
   }, [run, store])
