@@ -77,6 +77,7 @@ import { useSceneDocument } from '../hooks/useSceneDocument'
 import type { ResourceOpenEvent } from '@purescience/platform-ui/bridge/types'
 import type { SceneObject } from '../types'
 import { agentRefs, objectRefs, withOpen } from '../lib/agentRefs'
+import { isDeleteObjectKey } from '../lib/hotkeys'
 
 const SHAPES = [
   'box',
@@ -266,8 +267,10 @@ export function Workspace({
         store.workspace({ mode: 'rotate' })
       else if (event.key.toLowerCase() === 'r')
         store.workspace({ mode: 'scale' })
-      else if (event.key === 'Delete' && current.selectedId)
+      else if (isDeleteObjectKey(event) && current.selectedId) {
+        event.preventDefault()
         run(() => store.edit([{ op: 'delete', id: current.selectedId }]))
+      }
     }
     window.addEventListener('keydown', hotkey)
     return () => window.removeEventListener('keydown', hotkey)
