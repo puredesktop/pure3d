@@ -124,18 +124,23 @@ export function Timeline({
                 disabled={!object}
                 onClick={() =>
                   object &&
-                  edit([
-                    {
-                      op: 'keyframe',
-                      keyframe: {
-                        objectId: object.id,
-                        property,
-                        time: frame,
-                        value: pose(state.scene, object, frame)[property],
-                        easing: 'linear',
+                  run(() => {
+                    store.edit([
+                      {
+                        op: 'keyframe',
+                        keyframe: {
+                          objectId: object.id,
+                          property,
+                          time: frame,
+                          value: pose(state.scene, object, frame)[property],
+                          easing: 'linear',
+                        },
                       },
-                    },
-                  ])
+                    ])
+                    // Snap the playhead onto the new key so its easing and
+                    // remove controls find it.
+                    store.workspace({ time: frame, playing: false })
+                  })
                 }
               >
                 <Diamond size={12} />

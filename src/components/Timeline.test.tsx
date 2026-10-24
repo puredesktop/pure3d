@@ -51,3 +51,21 @@ it('samples a new keyframe value at its rounded frame time', async () => {
   const keyframe = scene.keyframes.find(key => key.time === 0.5)!
   expect(keyframe.value).toEqual([15, 0, 0])
 })
+
+it('selects the new keyframe so its easing and remove controls are enabled', async () => {
+  await act(async () => {
+    root.render(<Timeline store={store} run={action => action()} />)
+  })
+  const remove = () =>
+    container.querySelector<HTMLButtonElement>('[aria-label="Remove position keyframe"]')!
+  expect(remove().disabled).toBe(true)
+
+  const add = container.querySelector<HTMLButtonElement>('[aria-label="Add position keyframe"]')!
+  await act(async () => add.click())
+
+  expect(store.getSnapshot().time).toBe(0.5)
+  expect(remove().disabled).toBe(false)
+  expect(
+    container.querySelector('[aria-label="position keyframe at 0.5s"]')!.getAttribute('aria-pressed'),
+  ).toBe('true')
+})
