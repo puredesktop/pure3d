@@ -4,6 +4,16 @@ import { createRoot, type Root } from 'react-dom/client'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 const rendered = vi.hoisted(() => ({ draw: vi.fn(), animation: vi.fn(), resize: vi.fn(), sizable: true }))
 const decoded = vi.hoisted(() => ({ pixels: vi.fn<(url: string) => Promise<ArrayLike<number> | null>>() }))
+const documents = vi.hoisted(() => ({
+  autosavePlatformDocument: vi.fn(async (_request: { path: string; files: { content: string }[] }) => ({ savedAt: '2026-10-24T00:00:00.000Z' })),
+  createPlatformDraft: vi.fn(async () => ({ path: '/Drafts/Scene.pure3d' })),
+  touchPlatformRecentDocument: vi.fn(async () => undefined),
+  onPlatformDocumentsChanged: vi.fn(() => () => undefined),
+}))
+vi.mock('@purescience/platform-ui/bridge/documents', () => documents)
+vi.mock('@purescience/platform-ui/bridge/client', () => ({
+  bridge: { onEvent: vi.fn(() => () => undefined), call: vi.fn(async () => ({ ok: true })) },
+}))
 vi.mock('../lib/captureCheck', async importOriginal => ({
   ...(await importOriginal<typeof import('../lib/captureCheck')>()),
   decodeCapturePixels: (url: string) => decoded.pixels(url),
@@ -30,6 +40,7 @@ import * as THREE from 'three'
 import { SceneViewport, type ViewportAPI } from './SceneViewport'
 import { SceneStore } from '../lib/SceneStore'
 import { emptyScene, makeObject } from '../lib/scene'
+import { useSceneDocument } from '../hooks/useSceneDocument'
 let root: Root, store: SceneStore
 let jobs: Map<number, FrameRequestCallback>, sequence: number
 const api = { current: null as ViewportAPI | null }
@@ -53,6 +64,35 @@ beforeEach(() => {
 })
 afterEach(async () => { await act(async () => root.unmount()); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 const mount = async () => { await act(async () => root.render(<SceneViewport store={store} api={api} onError={onError} />)) }
+it.each(['moved', 'unchanged', 'draft'] as const)('saves a %s camera through the document lifecycle when the whole workspace unmounts', async mode => {
+  vi.useFakeTimers()
+  let documentActions!: ReturnType<typeof useSceneDocument>
+  function WorkspaceProbe() {
+    documentActions = useSceneDocument(store, true)
+    return <SceneViewport store={store} api={api} onError={onError} />
+  }
+  await act(async () => root.render(<WorkspaceProbe />))
+  if (mode !== 'draft') await act(async () => documentActions.lifecycle.adopt('/Scene.pure3d'))
+  if (mode !== 'unchanged') await act(async () => api.current!.frame())
+  const camera = store.getCameraSnapshot()
+  await act(async () => { vi.advanceTimersByTime(249) })
+  expect(documents.autosavePlatformDocument).not.toHaveBeenCalled()
+  expect(documents.createPlatformDraft).not.toHaveBeenCalled()
+
+  await act(async () => root.render(null))
+  if (mode === 'unchanged') {
+    expect(documents.autosavePlatformDocument).not.toHaveBeenCalled()
+  } else {
+    expect(documents.autosavePlatformDocument).toHaveBeenCalledTimes(1)
+    const saved = documents.autosavePlatformDocument.mock.calls[0]![0]
+    expect(saved.path).toBe(mode === 'draft' ? '/Drafts/Scene.pure3d' : '/Scene.pure3d')
+    expect(JSON.parse(saved.files[0].content).settings.camera).toEqual(camera)
+    expect(store.getDocument().settings.camera).toEqual(camera)
+    expect(store.getSnapshot().canUndo).toBe(false)
+  }
+  await act(async () => { vi.advanceTimersByTime(2000) })
+  expect(documents.autosavePlatformDocument).toHaveBeenCalledTimes(mode === 'unchanged' ? 0 : 1)
+})
 it('persists the camera when the viewport closes before its navigation save timer fires', async () => {
   vi.useFakeTimers()
   await mount()

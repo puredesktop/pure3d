@@ -272,8 +272,9 @@ export class SceneStore {
     this.publish({}, { domain: 'camera', affected: ['camera'] })
   }
   persistCamera() {
-    if (sameCamera(this.savedCamera, this.camera)) return
+    if (sameCamera(this.savedCamera, this.camera)) return false
     this.savedCamera = copyCamera(this.camera)
     this.publish({}, { domain: 'camera', affected: ['camera'], persisted: true })
+    return true
   }
 }
