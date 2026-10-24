@@ -147,20 +147,21 @@ it('commits a gizmo drag only when the handle actually moved the object', async 
   scene.keyframes = [{ objectId: object.id, property: 'position', time: 0, value: [0, 0, 0], easing: 'smooth' }, { objectId: object.id, property: 'position', time: 5, value: [5, 0, 0], easing: 'linear' }]
   store.replace(scene); await mount()
   await act(async () => store.workspace({ selectedId: object.id, time: 2 }))
-  const gizmo = gizmos.latest!
-  await act(async () => {
-    gizmo.dispatchEvent({ type: 'dragging-changed', value: true })
-    gizmo.dispatchEvent({ type: 'mouseUp' })
-    gizmo.dispatchEvent({ type: 'dragging-changed', value: false })
+  const gizmo = gizmos.latest! as unknown as THREE.EventDispatcher & { object?: THREE.Object3D }
+  const drag = async (move: (target: THREE.Object3D) => void) => act(async () => {
+    gizmo.dispatchEvent({ type: 'dragging-changed', value: true } as never)
+    move(gizmo.object!)
+    gizmo.dispatchEvent({ type: 'objectChange' } as never)
+    gizmo.dispatchEvent({ type: 'mouseUp' } as never)
+    gizmo.dispatchEvent({ type: 'dragging-changed', value: false } as never)
   })
+  // A click, movement off the active axis, and dragging away and back all leave it in place.
+  await drag(() => {})
+  await drag(target => { const x = target.position.x; target.position.x = x + 1; target.position.x = x })
   expect(store.getSnapshot().canUndo).toBe(false)
   expect(store.getSnapshot().scene.keyframes).toHaveLength(2)
-  await act(async () => {
-    gizmo.dispatchEvent({ type: 'dragging-changed', value: true })
-    gizmo.dispatchEvent({ type: 'objectChange' })
-    gizmo.dispatchEvent({ type: 'mouseUp' })
-    gizmo.dispatchEvent({ type: 'dragging-changed', value: false })
-  })
+  await drag(target => { target.position.y += 1 })
   expect(store.getSnapshot().canUndo).toBe(true)
   expect(store.getSnapshot().scene.keyframes).toHaveLength(3)
+  expect(store.getSnapshot().scene.keyframes.find(k => k.time === 2)!.value[1]).toBe(1)
 })
