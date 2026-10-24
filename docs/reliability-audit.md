@@ -81,8 +81,11 @@ the flush has cleared the timer. Tests cover existing documents, immediate and
 delayed draft creation, unchanged cameras with and without a document binding,
 the serialized camera, no undo entry, and no later duplicate save.
 
-Validation: `npm run typecheck` passes. `npm test` passes all 90 tests in 13
-app-source suites; the separate platform-contract suite cannot load its relative
-shell-source imports from this standalone worktree. No desktop close/reopen
+Validation: `npm run typecheck` passes using the local suite dependencies and
+base configuration. `npm test` runs all 90 tests in 13 app-source suites
+successfully, but exits with a failure because the separate platform-contract
+suite cannot load its relative shell-source imports from this standalone
+worktree. Temporary typecheck configuration was removed and the portable
+repository configuration restored afterward. No desktop close/reopen
 test was performed in this run; renderer and host services are mocked in the
 regression test. No visible controls or layout changed.

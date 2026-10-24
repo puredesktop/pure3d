@@ -271,6 +271,7 @@ export class SceneStore {
     this.camera = next
     this.publish({}, { domain: 'camera', affected: ['camera'] })
   }
+  /** Commit the live camera; report whether the durable document changed. */
   persistCamera() {
     if (sameCamera(this.savedCamera, this.camera)) return false
     this.savedCamera = copyCamera(this.camera)
