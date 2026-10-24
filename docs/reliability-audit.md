@@ -57,3 +57,32 @@ or user files were used. Installed-desktop filesystem, tab close, drawer and
 video-encoding flows were not exercised. `puredesktop:check` is mentioned in the
 contribution guide but is not present in this app's package scripts; the existing
 platform-contract tests provide manifest and permission validation here.
+
+## Camera-close regression (2026-10-24, PR #36)
+
+Confirmed the teardown failure with a parent harness that calls
+`useSceneDocument` and renders `SceneViewport`, matching Workspace's ownership.
+The test frames the scene, advances 249 ms of the 250 ms camera debounce, then
+removes the entire parent. With the document hook's subscription cleanup
+temporarily restored to unsubscribe only, both the bound-document and new-draft
+cases fail: no autosave occurs. The viewport-only test still passes, confirming
+that a store event alone does not establish document saving.
+
+The shared lifecycle cancels its autosave timer on unmount; it does not flush
+there. Its shell close handshake separately calls flush and already serializes
+the live camera (covered by the existing document-hook test). The missing path
+is React subtree teardown: the parent unsubscribes before the viewport commits
+its pending camera.
+
+The document hook now commits the camera before unsubscribing and explicitly
+flushes when that commit changed it. Draft creation must finish before flushing
+so its pending markDirty continuation cannot schedule another autosave after
+the flush has cleared the timer. Tests cover existing documents, immediate and
+delayed draft creation, unchanged cameras with and without a document binding,
+the serialized camera, no undo entry, and no later duplicate save.
+
+Validation: `npm run typecheck` passes. `npm test` passes all 90 tests in 13
+app-source suites; the separate platform-contract suite cannot load its relative
+shell-source imports from this standalone worktree. No desktop close/reopen
+test was performed in this run; renderer and host services are mocked in the
+regression test. No visible controls or layout changed.

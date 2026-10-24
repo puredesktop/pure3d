@@ -53,11 +53,15 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
         // Parent cleanup runs before the viewport's: publish while dirty
         // tracking is still subscribed, then save without waiting for a timer.
         const cameraChanged = store.persistCamera()
-        if (cameraChanged && ready && !loading.current) void flush()
+        if (cameraChanged && ready && !loading.current) {
+          // markDirty may still be creating a draft. Let it finish scheduling
+          // its autosave before flush clears that timer, including on unmount.
+          void ensureDraft().then(() => flush())
+        }
         unsubscribe()
       }
     },
-    [store, ready, markDirty, flush],
+    [store, ready, markDirty, flush, ensureDraft],
   )
 
   const save = useCallback(
