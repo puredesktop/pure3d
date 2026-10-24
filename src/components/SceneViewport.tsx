@@ -230,13 +230,23 @@ export const SceneViewport = memo(function SceneViewport({
       attributeFilter: ['data-platform-theme', 'data-platform-appearance'],
     })
     refresh()
+    // A press on a handle that never moves it must not commit an edit (or, on an
+    // animated object, insert a keyframe at the playhead).
+    let moved = false
     gizmo.addEventListener('dragging-changed', e => {
       orbit.enabled = !e.value
-      if (e.value) store.workspace({ playing: false })
+      if (e.value) {
+        moved = false
+        store.workspace({ playing: false })
+      }
     })
-    gizmo.addEventListener('objectChange', () => vertices?.preview())
+    gizmo.addEventListener('objectChange', () => {
+      moved = true
+      vertices?.preview()
+    })
     gizmo.addEventListener('mouseUp', () => {
-      if (!gizmo.object) return
+      if (!gizmo.object || !moved) return
+      moved = false
       const state = store.getSnapshot()
       const id = state.selectedId!
       try {

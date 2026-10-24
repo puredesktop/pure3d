@@ -26,6 +26,17 @@ vi.mock('three', async importOriginal => {
   }
   return { ...real, WebGLRenderer: Renderer }
 })
+const gizmos = vi.hoisted(() => ({ latest: null as null | { dispatchEvent: (event: { type: string; value?: boolean }) => void } }))
+vi.mock('three/addons/controls/TransformControls.js', async importOriginal => {
+  const real = await importOriginal<typeof import('three/addons/controls/TransformControls.js')>()
+  class RecordedControls extends real.TransformControls {
+    constructor(...args: ConstructorParameters<typeof real.TransformControls>) {
+      super(...args)
+      gizmos.latest = this as never
+    }
+  }
+  return { ...real, TransformControls: RecordedControls }
+})
 import * as THREE from 'three'
 import { SceneViewport, type ViewportAPI } from './SceneViewport'
 import { SceneStore } from '../lib/SceneStore'
@@ -130,4 +141,26 @@ it('refuses a blank capture instead of returning a transparent or unsized image'
   await expect(api.current!.capture()).rejects.toThrow('capture again once it is, or use getScene')
   decoded.pixels.mockResolvedValue(new Uint8ClampedArray([21, 21, 21, 255]))
   await expect(api.current!.capture()).resolves.toBe('data:image/png;base64,AA==')
+})
+it('commits a gizmo drag only when the handle actually moved the object', async () => {
+  const scene = store.getSnapshot().scene, object = scene.objects[0]
+  scene.keyframes = [{ objectId: object.id, property: 'position', time: 0, value: [0, 0, 0], easing: 'smooth' }, { objectId: object.id, property: 'position', time: 5, value: [5, 0, 0], easing: 'linear' }]
+  store.replace(scene); await mount()
+  await act(async () => store.workspace({ selectedId: object.id, time: 2 }))
+  const gizmo = gizmos.latest!
+  await act(async () => {
+    gizmo.dispatchEvent({ type: 'dragging-changed', value: true })
+    gizmo.dispatchEvent({ type: 'mouseUp' })
+    gizmo.dispatchEvent({ type: 'dragging-changed', value: false })
+  })
+  expect(store.getSnapshot().canUndo).toBe(false)
+  expect(store.getSnapshot().scene.keyframes).toHaveLength(2)
+  await act(async () => {
+    gizmo.dispatchEvent({ type: 'dragging-changed', value: true })
+    gizmo.dispatchEvent({ type: 'objectChange' })
+    gizmo.dispatchEvent({ type: 'mouseUp' })
+    gizmo.dispatchEvent({ type: 'dragging-changed', value: false })
+  })
+  expect(store.getSnapshot().canUndo).toBe(true)
+  expect(store.getSnapshot().scene.keyframes).toHaveLength(3)
 })

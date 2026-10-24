@@ -243,7 +243,8 @@ export class SceneStore {
         Math.max(0, patch.time),
         this.state.scene.settings.duration,
       )
-    if (patch.playing && this.state.time >= this.state.scene.settings.duration)
+    // Rewind only when playback would start at the end; an explicit playhead wins.
+    if (patch.playing && (patch.time ?? this.state.time) >= this.state.scene.settings.duration)
       patch.time = 0
     const changed = Object.fromEntries(Object.entries(patch).filter(([key, value]) => this.state[key as WorkspaceAffected] !== value)) as WorkspacePatch
     if (!Object.keys(changed).length) return
