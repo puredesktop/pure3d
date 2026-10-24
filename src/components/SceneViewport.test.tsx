@@ -51,8 +51,29 @@ beforeEach(() => {
   const scene = emptyScene(); scene.objects = [makeObject()]; store = new SceneStore(scene)
   root = createRoot(document.createElement('div'))
 })
-afterEach(async () => { await act(async () => root.unmount()); vi.restoreAllMocks(); vi.unstubAllGlobals() })
+afterEach(async () => { await act(async () => root.unmount()); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 const mount = async () => { await act(async () => root.render(<SceneViewport store={store} api={api} onError={onError} />)) }
+it('persists the camera when the viewport closes before its navigation save timer fires', async () => {
+  vi.useFakeTimers()
+  await mount()
+  const originalCamera = store.getDocument().settings.camera
+  const persisted = vi.fn()
+  store.subscribe(change => { if (change.persisted) persisted() })
+
+  await act(async () => api.current!.frame())
+  const camera = store.getCameraSnapshot()
+  expect(camera).not.toEqual(originalCamera)
+  await act(async () => { vi.advanceTimersByTime(249) })
+  expect(persisted).not.toHaveBeenCalled()
+  expect(store.getDocument().settings.camera).toEqual(originalCamera)
+
+  await act(async () => root.render(null))
+  expect(persisted).toHaveBeenCalledTimes(1)
+  expect(store.getDocument().settings.camera).toEqual(camera)
+  expect(store.getSnapshot().canUndo).toBe(false)
+  await act(async () => { vi.advanceTimersByTime(250) })
+  expect(persisted).toHaveBeenCalledTimes(1)
+})
 it('draws once while idle, redraws for an edit and leaves no perpetual animation loop', async () => {
   await mount(); await runFrame()
   expect(rendered.draw).toHaveBeenCalledTimes(1)
