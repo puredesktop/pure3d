@@ -26,6 +26,17 @@ vi.mock('three', async importOriginal => {
   }
   return { ...real, WebGLRenderer: Renderer }
 })
+const gizmos = vi.hoisted(() => ({ latest: null as null | { dispatchEvent: (event: { type: string; value?: boolean }) => void } }))
+vi.mock('three/addons/controls/TransformControls.js', async importOriginal => {
+  const real = await importOriginal<typeof import('three/addons/controls/TransformControls.js')>()
+  class RecordedControls extends real.TransformControls {
+    constructor(...args: ConstructorParameters<typeof real.TransformControls>) {
+      super(...args)
+      gizmos.latest = this as never
+    }
+  }
+  return { ...real, TransformControls: RecordedControls }
+})
 import * as THREE from 'three'
 import { SceneViewport, type ViewportAPI } from './SceneViewport'
 import { SceneStore } from '../lib/SceneStore'
@@ -130,4 +141,27 @@ it('refuses a blank capture instead of returning a transparent or unsized image'
   await expect(api.current!.capture()).rejects.toThrow('capture again once it is, or use getScene')
   decoded.pixels.mockResolvedValue(new Uint8ClampedArray([21, 21, 21, 255]))
   await expect(api.current!.capture()).resolves.toBe('data:image/png;base64,AA==')
+})
+it('commits a gizmo drag only when the handle actually moved the object', async () => {
+  const scene = store.getSnapshot().scene, object = scene.objects[0]
+  scene.keyframes = [{ objectId: object.id, property: 'position', time: 0, value: [0, 0, 0], easing: 'smooth' }, { objectId: object.id, property: 'position', time: 5, value: [5, 0, 0], easing: 'linear' }]
+  store.replace(scene); await mount()
+  await act(async () => store.workspace({ selectedId: object.id, time: 2 }))
+  const gizmo = gizmos.latest! as unknown as THREE.EventDispatcher & { object?: THREE.Object3D }
+  const drag = async (move: (target: THREE.Object3D) => void) => act(async () => {
+    gizmo.dispatchEvent({ type: 'dragging-changed', value: true } as never)
+    move(gizmo.object!)
+    gizmo.dispatchEvent({ type: 'objectChange' } as never)
+    gizmo.dispatchEvent({ type: 'mouseUp' } as never)
+    gizmo.dispatchEvent({ type: 'dragging-changed', value: false } as never)
+  })
+  // A click, movement off the active axis, and dragging away and back all leave it in place.
+  await drag(() => {})
+  await drag(target => { const x = target.position.x; target.position.x = x + 1; target.position.x = x })
+  expect(store.getSnapshot().canUndo).toBe(false)
+  expect(store.getSnapshot().scene.keyframes).toHaveLength(2)
+  await drag(target => { target.position.y += 1 })
+  expect(store.getSnapshot().canUndo).toBe(true)
+  expect(store.getSnapshot().scene.keyframes).toHaveLength(3)
+  expect(store.getSnapshot().scene.keyframes.find(k => k.time === 2)!.value[1]).toBe(1)
 })

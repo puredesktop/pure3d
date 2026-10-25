@@ -42,8 +42,11 @@ export function createToolHandlers(
   viewport: React.MutableRefObject<ViewportAPI | null>,
   resource: ResourceOpenEvent | null = null,
 ): Record<ToolName, AgentToolHandler> {
+  // Navigation settles into the document camera without a scene edit, so reads
+  // report the camera that saving would write, not the last edited one.
+  const readState = () => ({ ...store.getSnapshot(), scene: store.getDocument(true) })
   const context = () => {
-    const state = store.getSnapshot()
+    const state = readState()
     return {
       ...state,
       path: document.doc.path,
@@ -97,7 +100,7 @@ export function createToolHandlers(
     getScene: bind('getScene', async args => {
       if (isEmptyQuery(args)) return result(context())
       const { scene: _scene, ...extra } = context()
-      return result(queryScene(store.getSnapshot(), args, extra))
+      return result(queryScene(readState(), args, extra))
     }),
     editScene: bind('editScene', async args => {
       const before = current()

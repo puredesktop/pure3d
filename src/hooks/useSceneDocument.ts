@@ -32,7 +32,8 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
     appSlug: '3d',
     suffix: '.pure3d',
     kind: 'file',
-    suggestedTitle: store.getSnapshot().scene.title,
+    // Read at draft time: a new scene replaces the store before any re-render.
+    suggestedTitle: () => store.getSnapshot().scene.title,
     serialize: () => [
       {
         name: null,
