@@ -46,11 +46,23 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
   // Workspace updates stay transient. A settled camera is serialized once, without
   // becoming an undoable scene transaction.
   useEffect(
-    () =>
-      store.subscribe(change => {
+    () => {
+      const unsubscribe = store.subscribe(change => {
         if (ready && !loading.current && (change.domain === 'content' || change.persisted)) markDirty()
-      }),
-    [store, ready, markDirty],
+      })
+      return () => {
+        // Parent cleanup runs before the viewport's: publish while dirty
+        // tracking is still subscribed, then save without waiting for a timer.
+        const cameraChanged = store.persistCamera()
+        if (cameraChanged && ready && !loading.current) {
+          // markDirty may still be creating a draft. Let it finish scheduling
+          // its autosave before flush clears that timer, including on unmount.
+          void ensureDraft().then(() => flush())
+        }
+        unsubscribe()
+      }
+    },
+    [store, ready, markDirty, flush, ensureDraft],
   )
 
   const save = useCallback(

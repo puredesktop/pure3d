@@ -436,6 +436,7 @@ export const SceneViewport = memo(function SceneViewport({
       themeObserver.disconnect()
       if (cameraPersistTimeout !== undefined)
         window.clearTimeout(cameraPersistTimeout)
+      store.persistCamera()
       resize.disconnect()
       rendering.dispose()
       renderer.domElement.removeEventListener('pointerdown', down)
