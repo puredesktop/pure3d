@@ -25,6 +25,9 @@ export function handleWorkspaceHotkey(
     event.preventDefault()
     run(() => store.history(event.shiftKey ? 'redo' : 'undo'))
   } else if (event.code === 'Space') {
+    if (event.target instanceof Element && event.target.closest(
+      'button, input, textarea, select, a[href], summary, [contenteditable="true"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="checkbox"], [role="radio"], [role="switch"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="listbox"], [role="option"], [role="tab"], [role="treeitem"]',
+    )) return
     event.preventDefault()
     store.workspace({ playing: !current.playing })
   } else if (!command && event.key.toLowerCase() === 'f') viewport?.frame()
