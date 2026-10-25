@@ -22,7 +22,10 @@ export function Timeline({
   const state = useSceneState(store, TIMELINE_STATE)
   const object = state.scene.objects.find(o => o.id === state.selectedId)
   const fps = state.scene.settings.fps
-  const frame = Math.round(state.time * fps) / fps
+  const frame = Math.min(
+    Math.round(state.time * fps) / fps,
+    state.scene.settings.duration,
+  )
   const keys = state.scene.keyframes.filter(
     k => k.objectId === state.selectedId,
   )
@@ -121,18 +124,23 @@ export function Timeline({
                 disabled={!object}
                 onClick={() =>
                   object &&
-                  edit([
-                    {
-                      op: 'keyframe',
-                      keyframe: {
-                        objectId: object.id,
-                        property,
-                        time: Math.min(frame, state.scene.settings.duration),
-                        value: pose(state.scene, object, state.time)[property],
-                        easing: 'linear',
+                  run(() => {
+                    store.edit([
+                      {
+                        op: 'keyframe',
+                        keyframe: {
+                          objectId: object.id,
+                          property,
+                          time: frame,
+                          value: pose(state.scene, object, frame)[property],
+                          easing: 'linear',
+                        },
                       },
-                    },
-                  ])
+                    ])
+                    // Snap the playhead onto the new key so its easing and
+                    // remove controls find it.
+                    store.workspace({ time: frame, playing: false })
+                  })
                 }
               >
                 <Diamond size={12} />
