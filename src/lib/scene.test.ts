@@ -71,6 +71,16 @@ describe('Scene transactions', () => {
     expect(removed.objects.map(o => o.id)).toEqual(['copy', copiedChild.id])
     expect(removed.keyframes).toHaveLength(1)
   })
+  it('duplicates objects whose names are at the length limit', () => {
+    const scene = emptyScene()
+    scene.objects.push(makeObject('box', 'n'.repeat(200)))
+    const next = applyOperations(scene, [
+      { op: 'duplicate', id: scene.objects[0].id, newId: 'copy' },
+    ])
+    const copy = next.objects.find(o => o.id === 'copy')!
+    expect(copy.name).toHaveLength(200)
+    expect(copy.name.endsWith(' copy')).toBe(true)
+  })
   it('rejects bad geometry, duplicate IDs and keyframes outside the timeline', () => {
     expect(() =>
       geometrySchema.parse({
@@ -261,6 +271,15 @@ describe('Animation', () => {
     store.tick(2)
     expect(store.getSnapshot().time).toBe(5)
     expect(store.getSnapshot().playing).toBe(false)
+  })
+  it('plays from an explicit playhead even when the previous playhead sat at the end', () => {
+    const store = new SceneStore()
+    store.workspace({ time: 5 })
+    store.workspace({ time: 2, playing: true })
+    expect(store.getSnapshot()).toMatchObject({ time: 2, playing: true })
+    store.workspace({ playing: false, time: 1 })
+    store.workspace({ time: 5, playing: true })
+    expect(store.getSnapshot()).toMatchObject({ time: 0, playing: true })
   })
 })
 

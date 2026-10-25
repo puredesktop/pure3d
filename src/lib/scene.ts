@@ -263,7 +263,8 @@ export function applyOperations(
             .map(o => ({
               ...structuredClone(o),
               id: remap.get(o.id)!,
-              name: `${o.name} copy`,
+              // Names are capped at 200 characters; keep the suffix visible.
+              name: `${o.name.slice(0, 195)} copy`,
               parentId: o.id === root.id ? o.parentId : remap.get(o.parentId!)!,
             })),
         )

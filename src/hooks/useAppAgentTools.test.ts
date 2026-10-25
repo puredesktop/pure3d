@@ -70,6 +70,14 @@ describe('Assistant surface', () => {
     expect(store.getSnapshot().scene.objects).toHaveLength(0)
     expect(document.save).toHaveBeenCalledTimes(2)
   })
+  it('reports the navigated camera that saving writes, in full and summary reads', async () => {
+    const { store, invoke } = setup()
+    const camera = { position: [9, 6, 8], target: [1, 0, 0] }
+    store.setCamera({ position: [9, 6, 8], target: [1, 0, 0] })
+    store.persistCamera()
+    expect(JSON.parse((await invoke('getScene')).content).scene.settings.camera).toEqual(camera)
+    expect(JSON.parse((await invoke('getScene', { summary: true })).content).scene.settings.camera).toEqual(camera)
+  })
   it('validates arguments and controls transient state without saving', async () => {
     const { store, document, invoke } = setup()
     await expect(

@@ -230,13 +230,25 @@ export const SceneViewport = memo(function SceneViewport({
       attributeFilter: ['data-platform-theme', 'data-platform-appearance'],
     })
     refresh()
+    // A drag that leaves the handle where it started (a click, movement off the
+    // active axis, or dragging away and back) must not commit an edit or, on an
+    // animated object, insert a keyframe at the playhead.
+    const placement = (target: THREE.Object3D) =>
+      [...target.position.toArray(), ...target.quaternion.toArray(), ...target.scale.toArray()]
+    let dragStart: number[] | null = null
     gizmo.addEventListener('dragging-changed', e => {
       orbit.enabled = !e.value
-      if (e.value) store.workspace({ playing: false })
+      if (e.value) {
+        dragStart = gizmo.object ? placement(gizmo.object) : null
+        store.workspace({ playing: false })
+      }
     })
     gizmo.addEventListener('objectChange', () => vertices?.preview())
     gizmo.addEventListener('mouseUp', () => {
-      if (!gizmo.object) return
+      const start = dragStart
+      dragStart = null
+      if (!gizmo.object || !start) return
+      if (placement(gizmo.object).every((value, index) => value === start[index])) return
       const state = store.getSnapshot()
       const id = state.selectedId!
       try {

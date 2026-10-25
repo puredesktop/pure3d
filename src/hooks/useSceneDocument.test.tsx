@@ -261,6 +261,14 @@ describe('Scene document integration with the shared lifecycle', () => {
     expect(latest.doc.path).toBe('/Copy.pure3d')
   })
 
+  it('names a new scene draft after the new scene, not the outgoing one', async () => {
+    await act(async () => store.edit([{ op: 'settings', title: 'Outgoing scene' }]))
+    await act(async () => latest.lifecycle.adopt('/Outgoing.pure3d'))
+    await act(async () => { await latest.create('Fresh scene') })
+    const drafts = documents.createPlatformDraft.mock.calls.map(([request]) => request)
+    expect(drafts.at(-1)).toMatchObject({ title: 'Fresh scene' })
+  })
+
   it('does not let a failed open poison the following queued document action', async () => {
     const incoming = emptyScene('Good')
     files.readPlatformTextFile.mockRejectedValueOnce(new Error('Read failed')).mockResolvedValueOnce(JSON.stringify(incoming))

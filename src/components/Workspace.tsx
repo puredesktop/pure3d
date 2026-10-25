@@ -77,7 +77,11 @@ import { useSceneDocument } from '../hooks/useSceneDocument'
 import type { ResourceOpenEvent } from '@purescience/platform-ui/bridge/types'
 import type { SceneObject } from '../types'
 import { agentRefs, objectRefs, withOpen } from '../lib/agentRefs'
+<<<<<<< HEAD
 import { handleWorkspaceHotkey } from '../lib/workspaceHotkeys'
+=======
+import { isDeleteObjectKey } from '../lib/hotkeys'
+>>>>>>> origin/main
 
 const SHAPES = [
   'box',
@@ -245,8 +249,41 @@ export function Workspace({
     }
   }, [resource, clearResource, openPath, onError])
   useEffect(() => {
+<<<<<<< HEAD
     const hotkey = (event: KeyboardEvent) =>
       handleWorkspaceHotkey(event, store, viewport.current, run)
+=======
+    const hotkey = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLElement && event.target.closest('[role="dialog"]')) return
+      const editing =
+        event.target instanceof HTMLElement &&
+        (event.target.matches('input, textarea') ||
+          event.target.isContentEditable)
+      const command = event.ctrlKey || event.metaKey
+      if (editing) return
+      const current = store.getSnapshot()
+      if (command && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        run(() => store.history(event.shiftKey ? 'redo' : 'undo'))
+      } else if (event.code === 'Space') {
+        if (event.target instanceof Element && event.target.closest(
+          'button, input, textarea, select, a[href], summary, [contenteditable="true"], [role="button"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="checkbox"], [role="radio"], [role="switch"], [role="slider"], [role="spinbutton"], [role="combobox"], [role="listbox"], [role="option"], [role="tab"], [role="treeitem"]',
+        )) return
+        event.preventDefault()
+        store.workspace({ playing: !current.playing })
+      } else if (event.key.toLowerCase() === 'f') viewport.current?.frame()
+      else if (event.key.toLowerCase() === 'w')
+        store.workspace({ mode: 'translate' })
+      else if (event.key.toLowerCase() === 'e')
+        store.workspace({ mode: 'rotate' })
+      else if (event.key.toLowerCase() === 'r')
+        store.workspace({ mode: 'scale' })
+      else if (isDeleteObjectKey(event) && current.selectedId) {
+        event.preventDefault()
+        run(() => store.edit([{ op: 'delete', id: current.selectedId }]))
+      }
+    }
+>>>>>>> origin/main
     window.addEventListener('keydown', hotkey)
     return () => window.removeEventListener('keydown', hotkey)
   }, [run, store])
