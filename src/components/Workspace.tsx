@@ -77,7 +77,11 @@ import { useSceneDocument } from '../hooks/useSceneDocument'
 import type { ResourceOpenEvent } from '@purescience/platform-ui/bridge/types'
 import type { SceneObject } from '../types'
 import { agentRefs, objectRefs, withOpen } from '../lib/agentRefs'
+<<<<<<< HEAD
+import { handleWorkspaceHotkey } from '../lib/workspaceHotkeys'
+=======
 import { isDeleteObjectKey } from '../lib/hotkeys'
+>>>>>>> origin/main
 
 const SHAPES = [
   'box',
@@ -245,6 +249,10 @@ export function Workspace({
     }
   }, [resource, clearResource, openPath, onError])
   useEffect(() => {
+<<<<<<< HEAD
+    const hotkey = (event: KeyboardEvent) =>
+      handleWorkspaceHotkey(event, store, viewport.current, run)
+=======
     const hotkey = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLElement && event.target.closest('[role="dialog"]')) return
       const editing =
@@ -275,6 +283,7 @@ export function Workspace({
         run(() => store.edit([{ op: 'delete', id: current.selectedId }]))
       }
     }
+>>>>>>> origin/main
     window.addEventListener('keydown', hotkey)
     return () => window.removeEventListener('keydown', hotkey)
   }, [run, store])
