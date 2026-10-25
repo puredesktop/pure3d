@@ -118,5 +118,11 @@ export function useSceneDocument(store: SceneStore, ready: boolean) {
   const queuedSave = useCallback((path?: string) => enqueue(() => save(path)), [enqueue, save])
   const queuedOpen = useCallback((path: string) => enqueue(() => open(path)), [enqueue, open])
   const queuedCreate = useCallback((title?: string) => enqueue(() => create(title)), [enqueue, create])
-  return { lifecycle, doc: lifecycle.doc, save: queuedSave, open: queuedOpen, create: queuedCreate }
+  const clear = useCallback(() => {
+    reset()
+    // Replacing a deleted document is a clean load, not an edit needing a draft.
+    loading.current = true
+    try { store.replace(starterScene()) } finally { loading.current = false }
+  }, [store, reset])
+  return { lifecycle, doc: lifecycle.doc, save: queuedSave, open: queuedOpen, create: queuedCreate, clear }
 }

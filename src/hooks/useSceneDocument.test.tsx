@@ -134,6 +134,29 @@ describe('Scene document integration with the shared lifecycle', () => {
       ).objects,
     ).toEqual([])
   })
+  it('leaves the replacement for a deleted document unsaved until the first edit', async () => {
+    await act(async () => latest.lifecycle.adopt('/Deleted.pure3d'))
+    await act(async () => latest.lifecycle.flush({ throwOnError: true }))
+    documents.autosavePlatformDocument.mockClear()
+
+    await act(async () => latest.clear())
+    await settle()
+    await act(async () => vi.advanceTimersByTimeAsync(2000))
+    expect(latest.doc.path).toBeNull()
+    expect(store.getSnapshot().scene.title).toBe('Untitled scene')
+    expect(documents.createPlatformDraft).not.toHaveBeenCalled()
+    expect(documents.autosavePlatformDocument).not.toHaveBeenCalled()
+
+    const object = makeObject('cone')
+    await act(async () => store.edit([{ op: 'add', object }]))
+    await settle()
+    await act(async () => vi.advanceTimersByTimeAsync(2000))
+    expect(documents.createPlatformDraft).toHaveBeenCalledTimes(1)
+    expect(latest.doc.path).toBe('/Drafts/Scene.pure3d')
+    const saved = documents.autosavePlatformDocument.mock.calls[0]![0]
+    expect(saved.path).toBe('/Drafts/Scene.pure3d')
+    expect(JSON.parse(saved.files[0].content).objects).toContainEqual(object)
+  })
   it('coalesces camera persistence while selection and live camera updates stay clean', async () => {
     await act(async () => {
       store.workspace({ selectedId: null })
