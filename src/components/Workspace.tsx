@@ -321,7 +321,7 @@ export function Workspace({
       if (bound) lifecycle.reset()
       try {
         await deletePlatformFile(item.path)
-        if (bound) store.replace(starterScene())
+        if (bound) document.clear()
       } catch (error) {
         if (bound) lifecycle.adopt(item.path)
         throw error
