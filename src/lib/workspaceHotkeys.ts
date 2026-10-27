@@ -1,3 +1,5 @@
+import { isDeleteObjectKey } from './hotkeys'
+
 export type WorkspaceHotkeyStore = {
   getSnapshot(): { playing: boolean; selectedId: string | null }
   workspace(patch: {
@@ -37,6 +39,8 @@ export function handleWorkspaceHotkey(
     store.workspace({ mode: 'rotate' })
   else if (!command && event.key.toLowerCase() === 'r')
     store.workspace({ mode: 'scale' })
-  else if (event.key === 'Delete' && current.selectedId)
+  else if (isDeleteObjectKey(event) && current.selectedId) {
+    event.preventDefault()
     run(() => store.edit([{ op: 'delete', id: current.selectedId! }]))
+  }
 }

@@ -40,6 +40,15 @@ describe('workspace hotkeys', () => {
     },
   )
 
+  it.each(['Backspace', 'Delete'])('deletes the selected object with %s and prevents browser navigation', shortcut => {
+    const { store, viewport, run } = setup()
+    store.getSnapshot = () => ({ playing: false, selectedId: 'cube' })
+    const event = key(shortcut)
+    handleWorkspaceHotkey(event, store, viewport, run)
+    expect(store.edit).toHaveBeenCalledWith([{ op: 'delete', id: 'cube' }])
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+  })
+
   it('still handles unmodified handle and framing shortcuts', () => {
     const { store, viewport, run } = setup()
     for (const shortcut of ['w', 'e', 'r', 'f'])
