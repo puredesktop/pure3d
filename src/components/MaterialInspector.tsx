@@ -6,6 +6,8 @@ import {
 import { ToggleSwitch } from '@purescience/platform-ui/components/common/inputs/ToggleSwitch'
 import { ImagePlus, Layers, Trash2 } from 'lucide-react'
 import { Choice, ColorField, NumberField } from './Controls'
+import { SURFACES, SURFACE_KINDS } from '../lib/surfaceSpecs.mjs'
+import type { SurfaceKind } from '../lib/surfaces'
 import { applyImageTexture, importWorkspaceTexture } from '../lib/workflows'
 import {
   isStandaloneDevMode,
@@ -150,6 +152,32 @@ export function MaterialInspector({
         checked={material.wireframe}
         onChange={wireframe => update({ wireframe })}
       />
+      <Choice
+        label={`Surface: ${material.surface && material.surface !== 'none' ? SURFACES[material.surface].label : 'Smooth'}`}
+        options={[{ value: 'none', label: 'Smooth' }, ...SURFACE_KINDS.map(kind => ({ value: kind, label: SURFACES[kind].label }))]}
+        onChange={surface => update({ surface: surface as SurfaceKind | 'none' })}
+      />
+      {material.surface && material.surface !== 'none' && (
+        <div className="material-fields">
+          <NumberField
+            label="Surface size"
+            value={material.surfaceScale ?? SURFACES[material.surface].scale}
+            min={0.005}
+            max={1000}
+            step={0.05}
+            unit="m"
+            onChange={surfaceScale => update({ surfaceScale })}
+          />
+          <NumberField
+            label="Surface strength"
+            value={material.surfaceStrength ?? 1}
+            min={0}
+            max={2}
+            step={0.05}
+            onChange={surfaceStrength => update({ surfaceStrength })}
+          />
+        </div>
+      )}
       <div className="row texture-controls">
         {texture && (
           <img

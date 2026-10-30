@@ -4,6 +4,8 @@ import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometr
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { generatorParams } from './generatorSpecs.mjs'
 import { leafAtlas, ATLAS } from './leafAtlas'
+import { dressWater } from './water'
+import { extendShader } from './shaderHooks'
 import type { SceneDocument, SceneObject } from '../types'
 
 /**
@@ -35,9 +37,12 @@ const smoothstep = (a: number, b: number, x: number) => {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const color = (hex: string) => new THREE.Color(hex)
 
-/** Every builder part carries the same attributes, so parts merge into one geometry. */
-/** uv: where in the leaf atlas every vertex samples (the solid patch by default); null keeps the part's own UVs (cards). */
-function prepare(geometry: THREE.BufferGeometry, tint: THREE.Color | ((p: THREE.Vector3, n: THREE.Vector3) => THREE.Color), uv: readonly [number, number] | null = ATLAS.solid): THREE.BufferGeometry {
+/**
+ * Every builder part carries the same attributes, so parts merge into one geometry. uv: where in the leaf atlas every
+ * vertex samples (the solid patch by default); null keeps the part's own UVs (cards). surface: 1 where the material's
+ * surface (bark, stone) shows, 0 where it does not (leaf cards and the dark inner canopy).
+ */
+function prepare(geometry: THREE.BufferGeometry, tint: THREE.Color | ((p: THREE.Vector3, n: THREE.Vector3) => THREE.Color), uv: readonly [number, number] | null = ATLAS.solid, surface = uv ? 1 : 0): THREE.BufferGeometry {
   const g = geometry.index ? geometry.toNonIndexed() : geometry
   if (g !== geometry) geometry.dispose()
   if (!g.getAttribute('normal')) g.computeVertexNormals()
@@ -51,6 +56,7 @@ function prepare(geometry: THREE.BufferGeometry, tint: THREE.Color | ((p: THREE.
     colors.set([c.r, c.g, c.b], i * 3)
   }
   g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  g.setAttribute('surfaceMask', new THREE.BufferAttribute(new Float32Array(position.count).fill(surface), 1))
   if (uv || !g.getAttribute('uv')) {
     const uvs = new Float32Array(position.count * 2)
     for (let i = 0; i < position.count; i++) uvs.set(uv ?? ATLAS.solid, i * 2)
@@ -156,12 +162,12 @@ function trunk(height: number, radius: number, bark: THREE.Color, random: () => 
 }
 
 /** A cluster of leaf cards on a blob of canopy, lit as a volume (normals point out from the blob's centre). */
-function leafCards(centre: THREE.Vector3, radius: number, count: number, size: number, leaves: THREE.Color, random: () => number, region: 'leaves' | 'needles', droop = 0): THREE.BufferGeometry[] {
+function leafCards(centre: THREE.Vector3, radius: number, count: number, size: number, leaves: THREE.Color, random: () => number, region: 'leaves' | 'needles', droop = 0, depth: readonly [number, number] = [0.55, 1.05]): THREE.BufferGeometry[] {
   const parts: THREE.BufferGeometry[] = []
   const [u0, u1] = region === 'leaves' ? ATLAS.leaves : ATLAS.needles
   for (let i = 0; i < count; i++) {
     const direction = new THREE.Vector3(random() * 2 - 1, random() * 1.6 - 0.5, random() * 2 - 1).normalize()
-    const at = centre.clone().addScaledVector(direction, radius * (0.55 + random() * 0.5))
+    const at = centre.clone().addScaledVector(direction, radius * lerp(depth[0], depth[1], random()))
     const card = new THREE.PlaneGeometry(size * (0.8 + random() * 0.5), size * (0.8 + random() * 0.5))
     const uv = card.getAttribute('uv')
     for (let v = 0; v < uv.count; v++) uv.setX(v, lerp(u0, u1, uv.getX(v)))
@@ -177,7 +183,9 @@ function leafCards(centre: THREE.Vector3, radius: number, count: number, size: n
       normals.set([p.x, p.y, p.z], v * 3)
     }
     card.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
-    const shade = 0.78 + random() * 0.32 + (at.y - centre.y) / Math.max(radius, 1e-3) * 0.12
+    // leaves deep in the crown get less light
+    const inside = 1 - Math.min(1, at.distanceTo(centre) / Math.max(radius, 1e-3))
+    const shade = (0.8 + random() * 0.28 + (at.y - centre.y) / Math.max(radius, 1e-3) * 0.12) * (1 - inside * 0.55)
     const tone = leaves.clone().offsetHSL((random() - 0.5) * 0.03, 0, 0).multiplyScalar(shade)
     parts.push(prepare(card, tone, null))
   }
@@ -196,7 +204,7 @@ function canopyCore(centre: THREE.Vector3, radius: number, leaves: THREE.Color, 
     position.setXYZ(i, p.x * bump + centre.x, p.y * bump * squash + centre.y, p.z * bump + centre.z)
   }
   geometry.computeVertexNormals()
-  return prepare(geometry, leaves.clone().multiplyScalar(0.55))
+  return prepare(geometry, leaves.clone().multiplyScalar(0.55), ATLAS.solid, 0)
 }
 
 function tree(style: string, height: number, leavesHex: string, barkHex: string, fullness: number, seed: number): THREE.BufferGeometry {
@@ -211,7 +219,7 @@ function tree(style: string, height: number, leavesHex: string, barkHex: string,
     // a dark inner cone so the crown is never see-through
     const core = new THREE.ConeGeometry(spread * 0.5, height - crownBase, 10, 6)
     core.translate(0, crownBase + (height - crownBase) / 2, 0)
-    parts.push(prepare(core, leaves.clone().multiplyScalar(0.3)))
+    parts.push(prepare(core, leaves.clone().multiplyScalar(0.3), ATLAS.solid, 0))
     const whorls = Math.round((fir ? 18 : 15) * Math.sqrt(fullness))
     for (let w = 0; w < whorls; w++) {
       const t = w / whorls
@@ -248,8 +256,9 @@ function tree(style: string, height: number, leavesHex: string, barkHex: string,
     for (let i = 0; i < 4; i++) {
       const centre = new THREE.Vector3((random() - 0.5) * radius, radius * (0.55 + random() * 0.25), (random() - 0.5) * radius)
       const r = radius * (0.55 + random() * 0.25)
-      parts.push(canopyCore(centre, r * 0.8, leaves, random, 0.8))
-      parts.push(...leafCards(centre, r, Math.round(26 * fullness), r * 0.75, leaves, random, 'leaves'))
+      parts.push(canopyCore(centre, r * 0.5, leaves.clone().multiplyScalar(0.6), random, 0.8))
+      parts.push(...leafCards(centre, r, Math.round(34 * fullness), r * 0.6, leaves, random, 'leaves'))
+      parts.push(...leafCards(centre, r, Math.round(14 * fullness), r * 0.5, leaves, random, 'leaves', 0, [0.25, 0.6]))
     }
     return merge(parts)
   }
@@ -274,10 +283,29 @@ function tree(style: string, height: number, leavesHex: string, barkHex: string,
       branch.translate(from.x, from.y, from.z)
       parts.push(prepare(branch, birch ? color('#8f8a80') : bark))
     }
-    if (!birch) parts.push(canopyCore(centre, r * 0.6, leaves.clone().multiplyScalar(0.7), random))
-    parts.push(...leafCards(centre, r, Math.round((birch ? 36 : 60) * fullness), r * (birch ? 0.7 : 0.9), leaves, random, 'leaves', birch ? 0.5 : 0))
+    // a small dark core keeps the crown from looking hollow; leaves inside it and on its shell do the rest
+    if (!birch) parts.push(canopyCore(centre, r * 0.42, leaves.clone().multiplyScalar(0.55), random))
+    parts.push(...leafCards(centre, r, Math.round((birch ? 50 : 84) * fullness), r * (birch ? 0.6 : 0.7), leaves, random, 'leaves', birch ? 0.5 : 0))
+    parts.push(...leafCards(centre, r, Math.round((birch ? 16 : 34) * fullness), r * 0.55, leaves, random, 'leaves', birch ? 0.5 : 0, [0.2, 0.6]))
   }
   return merge(parts)
+}
+
+/** A cupped flower: rounded petals around a small centre, facing up. */
+function flowerHead(radius: number, petals: number): THREE.BufferGeometry {
+  const positions: number[] = []
+  const steps = petals * 6
+  const rim = (i: number) => {
+    const a = (i / steps) * Math.PI * 2
+    // each petal is a rounded lobe: wide at its middle, pinched between petals
+    const r = radius * (0.35 + 0.65 * Math.pow(Math.abs(Math.sin((a * petals) / 2)), 0.6))
+    return [Math.cos(a) * r, (r / radius) * radius * 0.3, Math.sin(a) * r]
+  }
+  for (let i = 0; i < steps; i++) positions.push(0, 0, 0, ...rim(i + 1), ...rim(i))
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  return geometry
 }
 
 function grass(height: number, random: () => number, tint: THREE.Color, flowers?: THREE.Color): THREE.BufferGeometry {
@@ -303,12 +331,13 @@ function grass(height: number, random: () => number, tint: THREE.Color, flowers?
     blade.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
     parts.push(prepare(blade, (p) => tint.clone().multiplyScalar(0.45 + 0.75 * (p.y / height))))
     if (flowers && i % 4 === 0) {
-      const head = new THREE.CircleGeometry(height * 0.09, 5)
-      head.rotateX(-Math.PI / 2 + (random() - 0.5) * 0.6)
+      const head = flowerHead(height * 0.06, 5 + Math.floor(random() * 3))
+      head.rotateX((random() - 0.5) * 0.6)
+      head.rotateY(random() * Math.PI)
       const top = blade.getAttribute('position')
       const tip = new THREE.Vector3().fromBufferAttribute(top, top.count - 2)
       head.translate(tip.x, tip.y, tip.z)
-      parts.push(prepare(head, (p) => (p.distanceTo(tip) < height * 0.03 ? color('#f4c542') : flowers.clone().multiplyScalar(0.9 + random() * 0.2))))
+      parts.push(prepare(head, (p) => (p.distanceTo(tip) < height * 0.012 ? color('#e0a526') : flowers.clone().multiplyScalar(0.9 + random() * 0.2))))
     }
   }
   return merge(parts)
@@ -337,18 +366,28 @@ function fern(size: number, random: () => number, tint: THREE.Color): THREE.Buff
 }
 
 function rock(size: number, craggy: number, flatness: number, stoneHex: string, moss: number, seed: number): THREE.BufferGeometry {
-  const geometry = mergeVertices(new THREE.IcosahedronGeometry(1, 4).deleteAttribute('normal').deleteAttribute('uv'))
+  const geometry = mergeVertices(new THREE.IcosahedronGeometry(1, 5).deleteAttribute('normal').deleteAttribute('uv'))
   const noise = noiseFor(seed * 13 + 5)
+  const random = seeded(seed * 5 + 1)
   const position = geometry.getAttribute('position')
   const p = new THREE.Vector3()
   const stretch = new THREE.Vector3(1 + noise.noise(seed, 1) * 0.25, 1 - flatness, 1 + noise.noise(1, seed) * 0.25)
+  // split faces: a few planes cut the lump flat, as weathered boulders break along joints
+  const cuts = Array.from({ length: 5 + Math.round(craggy * 7) }, () => ({
+    normal: new THREE.Vector3(random() * 2 - 1, random() * 1.6 - 0.4, random() * 2 - 1).normalize(),
+    at: 0.78 + random() * 0.18,
+  }))
   for (let i = 0; i < position.count; i++) {
     p.fromBufferAttribute(position, i)
-    let d = 0, f = 1.3, a = 0.32 * (0.4 + craggy)
-    for (let o = 0; o < 4; o++) { d += noise.noise3d(p.x * f, p.y * f, p.z * f) * a; f *= 2.1; a *= 0.45 }
-    // facets: quantise a little for a chipped look
-    const r = 1 + d
-    p.multiplyScalar(r).multiply(stretch)
+    let d = 0, f = 1.1, a = 0.22 * (0.4 + craggy)
+    for (let o = 0; o < 3; o++) { d += noise.noise3d(p.x * f, p.y * f, p.z * f) * a; f *= 2.2; a *= 0.4 }
+    p.multiplyScalar(1 + d)
+    for (const cut of cuts) {
+      const over = p.dot(cut.normal) - cut.at
+      // a soft cut: flat across the face, rounded where it meets the next one
+      if (over > 0) p.addScaledVector(cut.normal, -over * 0.85)
+    }
+    p.multiply(stretch)
     position.setXYZ(i, p.x * size * 0.5, Math.max(p.y, -0.6) * size * 0.5, p.z * size * 0.5)
   }
   let lowest = Infinity
@@ -406,6 +445,7 @@ function water(input: Params): THREE.BufferGeometry {
   const uv = coloured.getAttribute('uv')
   const pos = coloured.getAttribute('position')
   for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) / width + 0.5, pos.getZ(i) / depth + 0.5)
+  coloured.userData.water = { width, depth, waves, level: 0.04 }
   return coloured
 }
 
@@ -445,12 +485,23 @@ export function savedWorldMatrix(document: SceneDocument, id: string): THREE.Mat
   return matrix
 }
 
-/** What a scatter depends on besides its own parameters: the terrain it sits on, and where both are. */
+/** The water a scatter keeps out of: each visible water object's footprint, in its own space. */
+function waterFootprints(document: SceneDocument) {
+  return document.objects
+    .filter(item => item.kind === 'water' && item.visible)
+    .map(item => {
+      const params = generatorParams('water', item.params)
+      return { id: item.id, params, toLocal: savedWorldMatrix(document, item.id).invert() }
+    })
+}
+
+/** What a scatter depends on besides its own parameters: the terrain it sits on, water it keeps out of, and where all are. */
 export function scatterDependency(document: SceneDocument, object: SceneObject): string {
   const on = object.params?.on
   const terrain = on ? document.objects.find(item => item.id === on && item.kind === 'terrain') : undefined
-  if (!terrain) return ''
-  return JSON.stringify([terrain.params, savedWorldMatrix(document, terrain.id).elements, savedWorldMatrix(document, object.id).elements])
+  const water = waterFootprints(document).map(item => [item.params, item.toLocal.elements])
+  if (!terrain && !water.length) return ''
+  return JSON.stringify([terrain?.params, terrain && savedWorldMatrix(document, terrain.id).elements, savedWorldMatrix(document, object.id).elements, water])
 }
 
 function scatter(document: SceneDocument | null, object: SceneObject): THREE.InstancedMesh {
@@ -474,11 +525,24 @@ function scatter(document: SceneDocument | null, object: SceneObject): THREE.Ins
   const fromWorld = toWorld ? toWorld.clone().invert() : null
   const toTerrain = terrainMatrix ? terrainMatrix.clone().invert() : null
   const lean = ['rock', 'grass', 'flowers', 'fern'].includes(str(params, 'item')) ? 0.25 : 0.05
+  // nothing grows in a pond: skip points over any water's surface (with a little margin for banks)
+  const waters = document ? waterFootprints(document) : []
+  const scatterMatrix = document && waters.length ? savedWorldMatrix(document, object.id) : null
+  const inWater = (x: number, z: number) => {
+    if (!scatterMatrix) return false
+    const world = new THREE.Vector3(x, 0, z).applyMatrix4(scatterMatrix)
+    return waters.some(({ params: water, toLocal }) => {
+      const local = world.clone().applyMatrix4(toLocal)
+      const rx = Math.abs(local.x) / (num(water, 'width') / 2), rz = Math.abs(local.z) / (num(water, 'depth') / 2)
+      return str(water, 'shape') === 'round' ? Math.hypot(rx, rz) < 1.04 : Math.max(rx, rz) < 1.02
+    })
+  }
   const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(), m = new THREE.Matrix4(), c = new THREE.Color()
   let placed = 0
   for (let attempt = 0; attempt < count * 40 && placed < count; attempt++) {
     const x = (random() - 0.5) * width, z = (random() - 0.5) * depth
     if (avoid > 0 && Math.hypot(x, z) < avoid * (0.85 + random() * 0.3)) continue
+    if (inWater(x, z)) continue
     if (clumping > 0) {
       const d = density.noise(x * 0.08, z * 0.08) * 0.7 + density.noise(x * 0.25, z * 0.25) * 0.3
       if (random() > 1 - clumping * (0.5 - d * 0.5) * 1.6) continue
@@ -548,15 +612,29 @@ export function generatedNode(object: SceneObject, document: SceneDocument | nul
   return new THREE.Mesh(generatedGeometry(object), new THREE.MeshStandardMaterial())
 }
 
-/** Gives a generated object's material its vertex colours and, for foliage, the leaf atlas. */
+/** Gives a generated object's material its vertex colours and, for foliage, the leaf atlas; water mirrors the scene. */
 export function dressGenerated(node: THREE.Mesh, material: THREE.MeshStandardMaterial, hasOwnTexture: boolean) {
   material.vertexColors = node.geometry.hasAttribute('color')
+  if (node.geometry.userData.water && !hasOwnTexture && material.opacity === 1) dressWater(node, material)
   if (node.geometry.userData.leafAtlas && !hasOwnTexture) {
     const atlas = leafAtlas()
     if (atlas) {
       material.map = atlas
       material.alphaTest = 0.5
       material.side = THREE.DoubleSide
+      // sunlight through the leaves: crowns glow when the sun is behind them
+      extendShader(material, 'leaf-glow', shader => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <lights_fragment_end>',
+          `#include <lights_fragment_end>
+          #if NUM_DIR_LIGHTS > 0
+          {
+            float behind = pow(saturate(dot(normalize(-vViewPosition), directionalLights[0].direction)), 3.0);
+            reflectedLight.directDiffuse += diffuseColor.rgb * directionalLights[0].color * behind * 0.3;
+          }
+          #endif`,
+        )
+      })
     }
   }
   material.needsUpdate = true

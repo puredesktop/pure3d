@@ -9,6 +9,7 @@ import type {
   Vec3,
 } from '../types'
 import { DEFAULT_SCENE_BACKGROUND } from './viewportTheme'
+import type { SurfaceKind } from './surfaces'
 
 export type ResolvedMaterial = {
   color: string
@@ -22,6 +23,9 @@ export type ResolvedMaterial = {
   clearcoat?: number
   transmission?: number
   sheen?: number
+  surface?: SurfaceKind | 'none'
+  surfaceScale?: number
+  surfaceStrength?: number
 }
 const defaultMaterial: ResolvedMaterial = {
   color: '#7b9dcc',
@@ -31,9 +35,15 @@ const defaultMaterial: ResolvedMaterial = {
   wireframe: false,
   texture: null,
 }
-/** Generated objects carry their own colours (vertex colours), so their default tint is white and they are matte. */
-export function defaultMaterialFor(kind: SceneObject['kind']): Partial<ResolvedMaterial> {
-  return isGenerated(kind) ? { color: '#ffffff', metalness: 0, roughness: kind === 'water' ? 0.06 : 0.85 } : {}
+/**
+ * Generated objects carry their own colours (vertex colours), so their default tint is white and they are matte.
+ * Ground, rocks and trunks also get a surface (earth, stone, bark) unless the scene names another or 'none'.
+ */
+export function defaultMaterialFor(kind: SceneObject['kind'], params?: SceneObject['params']): Partial<ResolvedMaterial> {
+  if (!isGenerated(kind)) return {}
+  const item = kind === 'scatter' ? String(generatorParams('scatter', params).item) : kind
+  const surface = ({ terrain: 'ground', rock: 'stone', tree: 'bark', pine: 'bark', fir: 'bark', broadleaf: 'bark', birch: 'bark' } as const)[item as 'terrain']
+  return { color: '#ffffff', metalness: 0, roughness: kind === 'water' ? 0.06 : 0.85, ...(surface ? { surface } : {}) }
 }
 export function isGenerated(kind: SceneObject['kind']): boolean {
   return (GENERATOR_KINDS as readonly string[]).includes(kind)
@@ -48,7 +58,7 @@ export function resolveMaterial(scene: SceneDocument, object: SceneObject): Reso
       ? scene.objects.find(candidate => candidate.id === current!.parentId)
       : undefined
   }
-  const resolved = { ...defaultMaterial, ...defaultMaterialFor(object.kind) }
+  const resolved = { ...defaultMaterial, ...defaultMaterialFor(object.kind, object.params) }
   for (const entry of chain) {
     const { texture, ...properties } = entry.material
     Object.assign(resolved, properties)

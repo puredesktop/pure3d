@@ -9,6 +9,7 @@ import { BokehPass } from 'three/addons/postprocessing/BokehPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { CopyShader } from 'three/addons/shaders/CopyShader.js'
+import { GradePass, LightShaftsPass } from './finishing'
 import type { SceneDocument } from '../types'
 
 /**
@@ -26,6 +27,14 @@ class FoliageAwareGTAOPass extends GTAOPass {
         self._visibilityCache.push(object)
       }
     })
+  }
+}
+
+function disposeSkyScene(scene: THREE.Scene) {
+  for (const child of scene.children) {
+    const sky = child as Sky
+    sky.geometry.dispose()
+    sky.material.dispose()
   }
 }
 
@@ -55,6 +64,11 @@ export const DEFAULT_LOOK: Look = {
   bloom: 0,
   focusDistance: 0,
   aperture: 0.3,
+  lightShafts: 0,
+  saturation: 1,
+  contrast: 1,
+  warmth: 0,
+  vignette: 0,
 }
 
 export function resolveLook(document: SceneDocument): Look {
@@ -99,6 +113,8 @@ export class LookRig {
   private readonly bloom: UnrealBloomPass
   private readonly focus: BokehPass
   private readonly output = new OutputPass()
+  private readonly shafts: LightShaftsPass
+  private readonly grade = new GradePass()
   private readonly copy = new ShaderPass(CopyShader)
   private look: Look = DEFAULT_LOOK
   private radius = 10
@@ -128,8 +144,13 @@ export class LookRig {
     this.ao = new FoliageAwareGTAOPass(scene, camera, Math.max(1, size.x), Math.max(1, size.y))
     this.ao.output = GTAOPass.OUTPUT.Default
     this.bloom = new UnrealBloomPass(new THREE.Vector2(Math.max(1, size.x), Math.max(1, size.y)), 0.4, 0.5, 0.85)
+    // glow from lamps and highlights, not a white-out: the sky beside the sun is far brighter than anything else
+    const highPass = (this.bloom as unknown as { materialHighPassFilter: THREE.ShaderMaterial }).materialHighPassFilter
+    highPass.fragmentShader = highPass.fragmentShader.replace('vec4 texel = texture2D( tDiffuse, vUv );', 'vec4 texel = min( texture2D( tDiffuse, vUv ), vec4( 2.5 ) );')
+    highPass.needsUpdate = true
     this.focus = new BokehPass(scene, camera, { focus: 10, aperture: 0.0001, maxblur: 0.01 })
-    for (const pass of [this.render, this.ao, this.focus, this.bloom, this.output]) this.composer.addPass(pass)
+    this.shafts = new LightShaftsPass(scene, camera)
+    for (const pass of [this.render, this.ao, this.shafts, this.focus, this.bloom, this.output, this.grade]) this.composer.addPass(pass)
   }
 
   /** Light the scene for a look, a background colour and the bounds of what is in it. */
@@ -168,15 +189,9 @@ export class LookRig {
     if (key !== this.environmentKey) {
       this.environment?.dispose()
       if (sky) {
-        const skyScene = new THREE.Scene()
-        const copy = new Sky()
-        copy.scale.setScalar(1000)
-        for (const [name, uniform] of Object.entries(uniforms)) if (copy.material.uniforms[name]) copy.material.uniforms[name].value = (uniform as THREE.IUniform).value?.clone?.() ?? (uniform as THREE.IUniform).value
-        // no sun disc in reflections: the sun light makes the highlight
-        if (copy.material.uniforms.showSunDisc) copy.material.uniforms.showSunDisc.value = 0
-        skyScene.add(copy)
+        const skyScene = this.skyScene()
         this.environment = this.pmrem.fromScene(skyScene, 0, 0.1, 2000)
-        copy.geometry.dispose(); copy.material.dispose()
+        disposeSkyScene(skyScene)
       } else this.environment = this.pmrem.fromScene(this.room, 0.04)
       this.environmentKey = key
     }
@@ -198,6 +213,26 @@ export class LookRig {
     uniformsFocus.focus.value = look.focusDistance
     uniformsFocus.aperture.value = look.aperture * 0.0004
     uniformsFocus.maxblur.value = 0.012
+    this.shafts.strength = sky ? look.lightShafts * daylight : 0
+    this.shafts.sun.copy(direction)
+    this.shafts.sunColor.copy(this.sun.color).multiplyScalar(0.6 + look.sunIntensity * 0.12)
+    const grade = this.grade.material.uniforms
+    grade.saturation.value = look.saturation
+    grade.contrast.value = look.contrast
+    grade.warmth.value = look.warmth
+    grade.vignette.value = look.vignette
+    this.grade.enabled = look.saturation !== 1 || look.contrast !== 1 || look.warmth !== 0 || look.vignette > 0
+  }
+
+  /** A scene holding a copy of the sky as it is now, without the sun's disc (the sun light makes the highlight). */
+  private skyScene(): THREE.Scene {
+    const skyScene = new THREE.Scene()
+    const copy = new Sky()
+    copy.scale.setScalar(1000)
+    for (const [name, uniform] of Object.entries(this.sky.material.uniforms)) if (copy.material.uniforms[name]) copy.material.uniforms[name].value = (uniform as THREE.IUniform).value?.clone?.() ?? (uniform as THREE.IUniform).value
+    if (copy.material.uniforms.showSunDisc) copy.material.uniforms.showSunDisc.value = 0
+    skyScene.add(copy)
+    return skyScene
   }
 
   /** Grid, gizmos and other helpers are drawn after the finished frame, so they take no shadows or blur. */
@@ -241,6 +276,9 @@ export class LookRig {
 
   draw(toScreen = true) {
     if (this.sun.castShadow) this.focusShadows()
+    // beams only when the sun is ahead of the camera; the grade needs the frame's shape for its vignette
+    this.shafts.enabled = this.shafts.strength > 0 && this.shafts.sunInView()
+    this.grade.material.uniforms.aspect.value = this.camera.aspect
     this.composer.renderToScreen = toScreen
     this.composer.render()
   }
@@ -254,21 +292,30 @@ export class LookRig {
     const big = { width: Math.round(width * scale), height: Math.round(height * scale) }
     this.setShadowDetail(4096)
     this.setSize(big.width, big.height, 1)
-    const target = new THREE.WebGLRenderTarget(big.width, big.height)
     try {
       this.draw(false)
-      this.copy.render(this.renderer, target, this.composer.readBuffer, 0, false)
-      const pixels = new Uint8Array(big.width * big.height * 4)
-      this.renderer.readRenderTargetPixels(target, 0, 0, big.width, big.height, pixels)
+      return this.toPng(this.composer.readBuffer, big.width, big.height, width, height)
+    } finally {
+      this.setShadowDetail(2048)
+    }
+  }
+
+  /** A finished picture in a render target as a PNG data URL, scaled to width × height. */
+  private toPng(source: THREE.WebGLRenderTarget, sourceWidth: number, sourceHeight: number, width: number, height: number): string {
+    const target = new THREE.WebGLRenderTarget(sourceWidth, sourceHeight)
+    try {
+      this.copy.render(this.renderer, target, source, 0, false)
+      const pixels = new Uint8Array(sourceWidth * sourceHeight * 4)
+      this.renderer.readRenderTargetPixels(target, 0, 0, sourceWidth, sourceHeight, pixels)
       const full = document.createElement('canvas')
-      full.width = big.width
-      full.height = big.height
-      const image = new ImageData(big.width, big.height)
-      const row = big.width * 4
+      full.width = sourceWidth
+      full.height = sourceHeight
+      const image = new ImageData(sourceWidth, sourceHeight)
+      const row = sourceWidth * 4
       // WebGL rows run bottom to top
-      for (let y = 0; y < big.height; y++) image.data.set(pixels.subarray((big.height - 1 - y) * row, (big.height - y) * row), y * row)
+      for (let y = 0; y < sourceHeight; y++) image.data.set(pixels.subarray((sourceHeight - 1 - y) * row, (sourceHeight - y) * row), y * row)
       full.getContext('2d')!.putImageData(image, 0, 0)
-      if (scale === 1) return full.toDataURL('image/png')
+      if (sourceWidth === width && sourceHeight === height) return full.toDataURL('image/png')
       const out = document.createElement('canvas')
       out.width = width
       out.height = height
@@ -279,7 +326,6 @@ export class LookRig {
       return out.toDataURL('image/png')
     } finally {
       target.dispose()
-      this.setShadowDetail(2048)
     }
   }
 
@@ -290,6 +336,8 @@ export class LookRig {
     this.composer.dispose()
     this.ao.dispose()
     this.bloom.dispose()
+    this.shafts.dispose()
+    this.grade.dispose()
     this.sky.geometry.dispose()
     this.sky.material.dispose()
     this.sun.shadow.dispose()

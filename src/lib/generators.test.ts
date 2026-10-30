@@ -3,7 +3,9 @@ import * as THREE from 'three'
 import { applyOperations, emptyScene, makeObject, parseScene, resolveMaterial } from './scene'
 import { generatedNode, terrainField } from './generators'
 import { generatorParams, GENERATOR_KINDS } from './generatorSpecs.mjs'
-import { createSceneReconciler } from './threeScene'
+import { createSceneReconciler, makeMaterial } from './threeScene'
+import { surfaceTexture } from './surfaces'
+import { SURFACES } from './surfaceSpecs.mjs'
 import { DEFAULT_LOOK, resolveLook, sunDirection } from './look'
 import type { SceneObject } from '../types'
 
@@ -96,5 +98,79 @@ describe('Scene look', () => {
     const east = sunDirection(0, 90)
     expect(east.y).toBeCloseTo(0)
     expect(east.x).toBeCloseTo(1)
+  })
+})
+
+describe('Surfaces', () => {
+  it('gives ground, rocks and trees a surface unless the scene names one, and refuses unknown ones', () => {
+    const scene = emptyScene()
+    scene.objects = [object('terrain'), object('rock'), object('tree'), object('scatter', { item: 'pine' }, 'pines'), object('scatter', { item: 'grass' }, 'grass'), makeObject('box', 'Box')]
+    const surfaces = scene.objects.map(item => resolveMaterial(scene, item).surface)
+    expect(surfaces).toEqual(['ground', 'stone', 'bark', 'bark', undefined, undefined])
+    scene.objects[1]!.material = { surface: 'none' }
+    expect(resolveMaterial(scene, scene.objects[1]!).surface).toBe('none')
+    scene.objects[5]!.material = { surface: 'velvet' as never }
+    expect(() => parseScene(scene)).toThrow()
+  })
+  it('lays a surface over a material, limited to bark where a tree marks it', () => {
+    const tree = generatedNode(object('tree'), null)
+    const mask = tree.geometry.getAttribute('surfaceMask')
+    const values = new Set(Array.from(mask.array))
+    expect(values).toEqual(new Set([0, 1]))
+    const material = makeMaterial({ color: '#ffffff', metalness: 0, roughness: 0.8, opacity: 1, wireframe: false, surface: 'bark' }, tree.geometry)
+    expect(material.userData.surface).toMatchObject({ surface: 'bark', scale: SURFACES.bark.scale, strength: 1 })
+    expect(material.defines).toHaveProperty('P3D_SURFACE_MASK')
+    const shader = {
+      uniforms: {} as Record<string, THREE.IUniform>,
+      vertexShader: '#include <common>\n#include <begin_vertex>',
+      fragmentShader: '#include <common>\n#include <map_fragment>\n#include <roughnessmap_fragment>\n#include <normal_fragment_maps>',
+    }
+    material.onBeforeCompile(shader as never, null as never)
+    expect(shader.uniforms.p3dSurface!.value).toBe(surfaceTexture('bark'))
+    expect(shader.fragmentShader).toContain('p3dPerturb')
+    expect(shader.fragmentShader).toContain('* p3dMask')
+    expect(makeMaterial({ color: '#ffffff', metalness: 0, roughness: 0.5, opacity: 1, wireframe: false, surface: 'none' }).userData.surface).toBeUndefined()
+  })
+  it('draws each surface once, the same every time, as a varied pattern', () => {
+    const brick = surfaceTexture('brick')
+    expect(surfaceTexture('brick')).toBe(brick)
+    expect(brick.userData.shared).toBe(true)
+    const data = brick.image.data as Uint8Array
+    const heights = new Set<number>()
+    for (let i = 0; i < data.length; i += 4 * 97) heights.add(data[i]!)
+    expect(heights.size).toBeGreaterThan(20)
+  })
+})
+
+describe('Water', () => {
+  it('mirrors the scene and keeps scatters out of it', () => {
+    const scene = emptyScene()
+    const pond = object('water', { width: 10, depth: 10 }, 'pond')
+    scene.objects = [pond, object('scatter', { item: 'grass', count: 300, width: 30, depth: 30 }, 'grass')]
+    const built = createSceneReconciler(parseScene(scene))
+    const water = built.objects.get('pond') as THREE.Mesh
+    const material = water.material as THREE.MeshStandardMaterial
+    expect(material.normalMap).toBeTruthy()
+    expect(material.customProgramCacheKey()).toContain('water')
+    const grass = built.objects.get('grass') as THREE.InstancedMesh
+    const m = new THREE.Matrix4(), p = new THREE.Vector3()
+    for (let i = 0; i < grass.count; i++) {
+      grass.getMatrixAt(i, m)
+      p.setFromMatrixPosition(m)
+      expect(Math.hypot(p.x, p.z)).toBeGreaterThan(5)
+    }
+    // moving the pond moves the gap
+    built.reconcile(applyOperations(parseScene(scene), [{ op: 'update', id: 'pond', patch: { transform: { position: [8, 0, 0] } } }]))
+    expect(built.objects.get('grass')).not.toBe(grass)
+    built.dispose()
+  })
+})
+
+describe('Finishing', () => {
+  it('fills sunbeams and the grade with neutral defaults and checks their ranges', () => {
+    expect(resolveLook(emptyScene())).toMatchObject({ lightShafts: 0, saturation: 1, contrast: 1, warmth: 0, vignette: 0 })
+    const scene = applyOperations(emptyScene(), [{ op: 'settings', settings: { look: { lightShafts: 0.6, vignette: 0.3 } } }])
+    expect(resolveLook(scene)).toMatchObject({ lightShafts: 0.6, vignette: 0.3 })
+    expect(() => applyOperations(scene, [{ op: 'settings', settings: { look: { contrast: 3 } } }])).toThrow()
   })
 })

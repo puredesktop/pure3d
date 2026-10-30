@@ -152,7 +152,7 @@
         },
         {
           "name": "editScene",
-          "description": "Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings; settings.look merges with the current look. GENERATED SHAPES make natural, detailed scenes from a few numbers; prefer them to stacking primitives. Add one with kind, params (any omitted take their defaults) and geometry:null, material {} (vertex colours carry the colour; material.color tints). update with patch.params changes only the named params. terrain: Rolling ground from noise, coloured by height and slope (grass, soil, rock, snow), with an optional flat clearing in the middle. params width=60, depth=60, height=4, feature=18, roughness=0.45, clearing=0, segments=160, grass=\"#5b7f35\", soil=\"#7a6247\", rock=\"#80786d\", snow=\"#f2f4f7\", snowLine=1, seed=1. scatter: Many instances of one item (trees, rocks, grass, flowers) spread over an area or over a terrain, each varied in size, turn and colour. params item(pine|fir|broadleaf|birch|bush|rock|grass|flowers|fern)=\"pine\", count=120, width=40, depth=40, on=\"\", minScale=0.7, maxScale=1.4, avoid=0, clumping=0.4, maxSlope=35, variation=0.35, color=\"#ffffff\", seed=1. tree: One tree or bush with a tapered trunk and leafy canopy. params style(pine|fir|broadleaf|birch|bush)=\"broadleaf\", height=7, leaves=\"#4f7a2c\", bark=\"#5a4330\", fullness=1, seed=1. rock: A weathered boulder with moss on its upper faces. params size=1.2, roughness=0.5, flatness=0.35, stone=\"#8a8478\", moss=0.35, seed=1. water: A pond, lake or sea surface with gentle waves that reflects the sky. params width=12, depth=12, shape(round|square)=\"round\", waves=0.15, water=\"#1f5566\", seed=1. roundedBox: A unit box with softened edges, for product and architectural shapes; size it with scale. params radius=0.08, segments=4. A scatter with on:<terrain id> sits on that terrain's surface; give terrain a clearing and the scatter an avoid radius for an open glade. A terrain's centre is at y 0, so objects in its clearing stand at y 0. If a scatter blocks the camera, raise its avoid radius, shrink its area or move the camera into the clearing, rather than hiding it. LOOK (settings.look, all optional): environment sky|studio (sky = physical sky with clouds; studio = soft studio light on settings.background); sunElevation degrees (-12..90; 5-15 golden hour, below 0 dusk), sunAzimuth degrees (0 = +Z, 90 = +X; light from the side of the camera, not behind it), sunIntensity (3), sunColor (#rrggbb, default follows elevation), environmentIntensity (1), haze 0-1, clouds 0-1, shadows soft|sharp|off, fog 0-1 (sized to the scene), fogColor, exposure (1), ambientOcclusion 0-2 (1, contact shadows), bloom 0-3 (glow on bright and emissive things), focusDistance metres (0 = all sharp) with aperture 0-1 for background blur. MATERIALS also take emissive (#rrggbb) with emissiveIntensity for lamps and glows, clearcoat 0-1 (car paint, lacquer), transmission 0-1 (glass, water), sheen 0-1 (fabric). Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.",
+          "description": "Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings; settings.look merges with the current look. GENERATED SHAPES make natural, detailed scenes from a few numbers; prefer them to stacking primitives. Add one with kind, params (any omitted take their defaults) and geometry:null, material {} (vertex colours carry the colour; material.color tints). update with patch.params changes only the named params. terrain: Rolling ground from noise, coloured by height and slope (grass, soil, rock, snow), with an optional flat clearing in the middle. params width=60, depth=60, height=4, feature=18, roughness=0.45, clearing=0, segments=160, grass=\"#5b7f35\", soil=\"#7a6247\", rock=\"#80786d\", snow=\"#f2f4f7\", snowLine=1, seed=1. scatter: Many instances of one item (trees, rocks, grass, flowers) spread over an area or over a terrain, each varied in size, turn and colour. params item(pine|fir|broadleaf|birch|bush|rock|grass|flowers|fern)=\"pine\", count=120, width=40, depth=40, on=\"\", minScale=0.7, maxScale=1.4, avoid=0, clumping=0.4, maxSlope=35, variation=0.35, color=\"#ffffff\", seed=1. tree: One tree or bush with a tapered trunk and leafy canopy. params style(pine|fir|broadleaf|birch|bush)=\"broadleaf\", height=7, leaves=\"#4f7a2c\", bark=\"#5a4330\", fullness=1, seed=1. rock: A weathered boulder with moss on its upper faces. params size=1.2, roughness=0.5, flatness=0.35, stone=\"#8a8478\", moss=0.35, seed=1. water: A pond, lake or sea surface with gentle waves that reflects the sky. params width=12, depth=12, shape(round|square)=\"round\", waves=0.15, water=\"#1f5566\", seed=1. roundedBox: A unit box with softened edges, for product and architectural shapes; size it with scale. params radius=0.08, segments=4. A scatter with on:<terrain id> sits on that terrain's surface; give terrain a clearing and the scatter an avoid radius for an open glade. A terrain's centre is at y 0, so objects in its clearing stand at y 0. If a scatter blocks the camera, raise its avoid radius, shrink its area or move the camera into the clearing, rather than hiding it. Scatters keep out of water by themselves, and water mirrors the scene around it (trees, banks, sky). LOOK (settings.look, all optional): environment sky|studio (sky = physical sky with clouds; studio = soft studio light on settings.background); sunElevation degrees (-12..90; 5-15 golden hour, below 0 dusk), sunAzimuth degrees (0 = +Z, 90 = +X; light from the side of the camera, not behind it), sunIntensity (3), sunColor (#rrggbb, default follows elevation), environmentIntensity (1), haze 0-1, clouds 0-1, shadows soft|sharp|off, fog 0-1 (sized to the scene), fogColor, exposure (1), ambientOcclusion 0-2 (1, contact shadows), bloom 0-3 (glow on bright and emissive things), focusDistance metres (0 = all sharp) with aperture 0-1 for background blur, lightShafts 0-1 (sunbeams through trees and gaps when the sun is ahead of the camera; sky only), and a grade on the finished picture: saturation 0-2 (1), contrast 0.5-1.5 (1), warmth -1..1 (0), vignette 0-1 (0). MATERIALS also take emissive (#rrggbb) with emissiveIntensity for lamps and glows, clearcoat 0-1 (car paint, lacquer), transmission 0-1 (glass, water), sheen 0-1 (fabric), and surface: fine real-world detail laid over any shape without UVs, varying its colour, roughness and bumps around material.color: wood (grain and growth rings, 1 m), planks (floorboards or cladding with seams, 1.2 m), stone (weathered rock with cracks, 2 m), concrete (cast concrete with pores and stains, 2 m), plaster (soft trowelled wall finish, 3 m), brick (brick courses with mortar, 0.65 m), tiles (square tiles with grout, 1.2 m), metal (fine brushed streaks, 0.5 m), fabric (woven threads, 0.05 m), leather (grained, creased hide, 0.3 m), marble (polished stone with veins, 2 m), bark (deep vertical ridges, 1.2 m), ground (earth with pebbles and clumps, 2.5 m), sand (fine grains in wind ripples, 3 m); surfaceScale is metres per repeat (defaults above), surfaceStrength 0-2 (1), surface none for smooth. Terrain gets ground, rocks stone and trees bark unless set. Give walls, floors, furniture and props a surface; plain smooth colour reads as a toy. Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -521,6 +521,36 @@
                                   "type": "number",
                                   "minimum": 0,
                                   "maximum": 1
+                                },
+                                "surface": {
+                                  "type": "string",
+                                  "enum": [
+                                    "wood",
+                                    "planks",
+                                    "stone",
+                                    "concrete",
+                                    "plaster",
+                                    "brick",
+                                    "tiles",
+                                    "metal",
+                                    "fabric",
+                                    "leather",
+                                    "marble",
+                                    "bark",
+                                    "ground",
+                                    "sand",
+                                    "none"
+                                  ]
+                                },
+                                "surfaceScale": {
+                                  "type": "number",
+                                  "minimum": 0.005,
+                                  "maximum": 1000
+                                },
+                                "surfaceStrength": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2
                                 }
                               },
                               "additionalProperties": false
@@ -799,6 +829,36 @@
                                   "type": "number",
                                   "minimum": 0,
                                   "maximum": 1
+                                },
+                                "surface": {
+                                  "type": "string",
+                                  "enum": [
+                                    "wood",
+                                    "planks",
+                                    "stone",
+                                    "concrete",
+                                    "plaster",
+                                    "brick",
+                                    "tiles",
+                                    "metal",
+                                    "fabric",
+                                    "leather",
+                                    "marble",
+                                    "bark",
+                                    "ground",
+                                    "sand",
+                                    "none"
+                                  ]
+                                },
+                                "surfaceScale": {
+                                  "type": "number",
+                                  "minimum": 0.005,
+                                  "maximum": 1000
+                                },
+                                "surfaceStrength": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2
                                 }
                               },
                               "additionalProperties": false
@@ -1271,6 +1331,31 @@
                                   "maximum": 5000
                                 },
                                 "aperture": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "lightShafts": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "saturation": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2
+                                },
+                                "contrast": {
+                                  "type": "number",
+                                  "minimum": 0.5,
+                                  "maximum": 1.5
+                                },
+                                "warmth": {
+                                  "type": "number",
+                                  "minimum": -1,
+                                  "maximum": 1
+                                },
+                                "vignette": {
                                   "type": "number",
                                   "minimum": 0,
                                   "maximum": 1
