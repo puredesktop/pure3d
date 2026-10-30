@@ -67,7 +67,10 @@ function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 
 // ─── Terrain ────────────────────────────────────────────────────────────────
 
-/** A terrain's height at a point in its own coordinates (x, z in metres from its centre). */
+/**
+ * A terrain's height at a point in its own coordinates (x, z in metres from its centre). The centre is at height 0, so
+ * things placed at y = 0 stand on the ground in the middle (and in a clearing); hills rise and dips fall around it.
+ */
 export function terrainField(input: Params): (x: number, z: number) => number {
   const params = generatorParams('terrain', input)
   const noise = noiseFor(num(params, 'seed'))
@@ -85,10 +88,9 @@ export function terrainField(input: Params): (x: number, z: number) => number {
   }
   const centre = raw(0, 0)
   return (x, z) => {
-    const h = raw(x, z)
+    const h = raw(x, z) - centre
     if (clearing <= 0) return h
-    const t = smoothstep(clearing * 0.85, clearing * 1.9, Math.hypot(x, z))
-    return lerp(centre, h, t)
+    return h * smoothstep(clearing * 0.85, clearing * 1.9, Math.hypot(x, z))
   }
 }
 
@@ -107,7 +109,9 @@ function terrainGeometry(input: Params): THREE.BufferGeometry {
   const patches = noiseFor(num(params, 'seed') + 101)
   const grass = color(str(params, 'grass')), soil = color(str(params, 'soil')), rock = color(str(params, 'rock')), snow = color(str(params, 'snow'))
   const dryGrass = grass.clone().lerp(color('#a39a52'), 0.45), lushGrass = grass.clone().multiplyScalar(0.72)
-  const snowLine = num(params, 'snowLine'), base = field(0, 0)
+  const snowLine = num(params, 'snowLine')
+  let lowest = Infinity
+  for (let i = 0; i < position.count; i++) lowest = Math.min(lowest, position.getY(i))
   const normal = geometry.getAttribute('normal')
   const colors = new Float32Array(position.count * 3)
   const c = new THREE.Color()
@@ -119,7 +123,7 @@ function terrainGeometry(input: Params): THREE.BufferGeometry {
     c.lerp(soil, smoothstep(0.55, 0.85, patches.noise(x * 0.05 + 40, z * 0.05)) * 0.8)
     c.lerp(soil, smoothstep(0.12, 0.3, slope))
     c.lerp(rock, smoothstep(0.28, 0.5, slope + patch * 0.06))
-    if (snowLine < 1) c.lerp(snow, smoothstep(snowLine - 0.04, snowLine + 0.04, (y - base * 0) / height + patch * 0.05) * (1 - smoothstep(0.45, 0.7, slope)))
+    if (snowLine < 1) c.lerp(snow, smoothstep(snowLine - 0.04, snowLine + 0.04, (y - lowest) / height + patch * 0.05) * (1 - smoothstep(0.45, 0.7, slope)))
     colors.set([c.r, c.g, c.b], i * 3)
   }
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
@@ -128,11 +132,11 @@ function terrainGeometry(input: Params): THREE.BufferGeometry {
 
 // ─── Trees, bushes and ground cover ─────────────────────────────────────────
 
-function trunk(height: number, radius: number, bark: THREE.Color, random: () => number, white = false): THREE.BufferGeometry {
+function trunk(height: number, radius: number, bark: THREE.Color, random: () => number, white = false, bend = 1): THREE.BufferGeometry {
   const geometry = new THREE.CylinderGeometry(radius * 0.45, radius, height, 9, 6, true)
   geometry.translate(0, height / 2, 0)
   const position = geometry.getAttribute('position')
-  const lean = (random() - 0.5) * 0.08 * height, phase = random() * 6
+  const lean = (random() - 0.5) * 0.08 * height * bend, phase = random() * 6
   for (let i = 0; i < position.count; i++) {
     const t = position.getY(i) / height
     position.setX(i, position.getX(i) + Math.sin(t * 2.4 + phase) * lean * t)
@@ -147,7 +151,7 @@ function trunk(height: number, radius: number, bark: THREE.Color, random: () => 
   return prepare(geometry, p => {
     if (!white) return bark.clone().multiplyScalar(0.85 + marks.noise(p.x * 9, p.y * 3) * 0.15)
     const band = marks.noise(p.y * 7, Math.atan2(p.z, p.x) * 1.5)
-    return band > 0.3 ? color('#2d2a26') : color('#cfcac0').multiplyScalar(0.85 + band * 0.12)
+    return band > 0.3 ? color('#2d2a26') : color('#b3aea4').multiplyScalar(0.85 + band * 0.12)
   })
 }
 
@@ -203,12 +207,12 @@ function tree(style: string, height: number, leavesHex: string, barkHex: string,
     const fir = style === 'fir'
     const crownBase = height * (fir ? 0.08 : 0.32)
     const spread = height * (fir ? 0.2 : 0.17) * fullness
-    parts.push(trunk(height * 0.97, height * 0.022, bark, random))
+    parts.push(trunk(height * 0.9, height * 0.022, bark, random, false, 0.15))
     // a dark inner cone so the crown is never see-through
     const core = new THREE.ConeGeometry(spread * 0.5, height - crownBase, 10, 6)
     core.translate(0, crownBase + (height - crownBase) / 2, 0)
     parts.push(prepare(core, leaves.clone().multiplyScalar(0.3)))
-    const whorls = Math.round((fir ? 15 : 11) * Math.sqrt(fullness))
+    const whorls = Math.round((fir ? 18 : 15) * Math.sqrt(fullness))
     for (let w = 0; w < whorls; w++) {
       const t = w / whorls
       const y = lerp(crownBase, height * 0.98, t)
@@ -222,7 +226,7 @@ function tree(style: string, height: number, leavesHex: string, barkHex: string,
         const tone = leaves.clone().offsetHSL((random() - 0.5) * 0.02, 0, 0).multiplyScalar(shade)
         // two cards crossed at ±45° along each branch, so it reads as a bough from the side and from above
         for (const tilt of [0.75, -0.75]) {
-          const card = new THREE.PlaneGeometry(length, length * (fir ? 0.6 : 0.5))
+          const card = new THREE.PlaneGeometry(length, length * (fir ? 0.8 : 0.7))
           const uv = card.getAttribute('uv')
           for (let v = 0; v < uv.count; v++) uv.setX(v, lerp(ATLAS.needles[0], ATLAS.needles[1], uv.getX(v)))
           card.translate(length / 2, 0, 0)
@@ -251,7 +255,7 @@ function tree(style: string, height: number, leavesHex: string, barkHex: string,
   }
   const birch = style === 'birch'
   const trunkHeight = height * (birch ? 0.92 : 0.7)
-  parts.push(trunk(trunkHeight, height * (birch ? 0.015 : 0.035), birch ? color('#cfcac0') : bark, random, birch))
+  parts.push(trunk(trunkHeight, height * (birch ? 0.015 : 0.035), birch ? color('#b3aea4') : bark, random, birch))
   const crown = height * (birch ? 0.2 : 0.3) * fullness
   const top = new THREE.Vector3(0, height - crown * 0.85, 0)
   const blobs = birch ? 6 : 6 + Math.floor(random() * 3)
@@ -268,10 +272,10 @@ function tree(style: string, height: number, leavesHex: string, barkHex: string,
       branch.translate(0, length / 2, 0)
       branch.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), centre.clone().sub(from).normalize()))
       branch.translate(from.x, from.y, from.z)
-      parts.push(prepare(branch, birch ? color('#d9d4c8') : bark))
+      parts.push(prepare(branch, birch ? color('#8f8a80') : bark))
     }
-    if (!birch) parts.push(canopyCore(centre, r * 0.78, leaves, random))
-    parts.push(...leafCards(centre, r, Math.round((birch ? 22 : 34) * fullness), r * (birch ? 0.6 : 0.72), leaves, random, 'leaves', birch ? 0.5 : 0))
+    if (!birch) parts.push(canopyCore(centre, r * 0.6, leaves.clone().multiplyScalar(0.7), random))
+    parts.push(...leafCards(centre, r, Math.round((birch ? 36 : 60) * fullness), r * (birch ? 0.7 : 0.9), leaves, random, 'leaves', birch ? 0.5 : 0))
   }
   return merge(parts)
 }
@@ -387,7 +391,8 @@ function water(input: Params): THREE.BufferGeometry {
   for (let i = 0; i < position.count; i++) {
     const x = position.getX(i), z = position.getZ(i)
     const swell = Math.sin(x * 0.7 + z * 0.3) * 0.5 + noise.noise(x * 0.35, z * 0.35) * 0.35 + noise.noise(x * 1.7, z * 1.7) * 0.15
-    position.setY(i, swell * waves * 0.5)
+    // a few centimetres up, so a pond at y = 0 lies over flat ground without flickering into it
+    position.setY(i, 0.04 + swell * waves * 0.5)
   }
   const merged = mergeVertices(geometry)
   merged.computeVertexNormals()

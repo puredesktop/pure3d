@@ -16,7 +16,10 @@ or over a terrain with `on: <terrain id>`, leaving an `avoid` radius empty),
 `tree`, `rock`, `water` and `roundedBox`. Each is an `add` with `kind`,
 `params` and `geometry: null`; omitted params take their defaults, the same
 `seed` always makes the same shape, and `update` with `patch.params` changes
-only the params it names. The `editScene` description lists every param.
+only the params it names. The `editScene` description lists every param. A terrain's centre
+is at y = 0, so things in its clearing stand at y = 0. If a scatter blocks the
+camera, raise its `avoid` radius, shrink its area or put the camera in the
+clearing, rather than hiding the scatter.
 
 Light and finish live in `settings.look`, merged on each `settings` edit:
 `environment` `sky` (physical sky with clouds and a sun) or `studio` (soft

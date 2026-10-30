@@ -12,6 +12,24 @@ import { CopyShader } from 'three/addons/shaders/CopyShader.js'
 import type { SceneDocument } from '../types'
 
 /**
+ * Ambient occlusion that leaves alpha-cut foliage out of its depth pass: drawn there as whole cards (the pass ignores
+ * the leaf cut-outs), it would darken the sky behind every leaf card in squares.
+ */
+class FoliageAwareGTAOPass extends GTAOPass {
+  _overrideVisibility() {
+    const self = this as unknown as { _visibilityCache: THREE.Object3D[] }
+    ;(GTAOPass.prototype as unknown as { _overrideVisibility: () => void })._overrideVisibility.call(this)
+    this.scene.traverse(object => {
+      const material = (object as THREE.Mesh).material as THREE.Material | undefined
+      if (object.visible && (object as THREE.Mesh).isMesh && material && !Array.isArray(material) && material.alphaTest > 0) {
+        object.visible = false
+        self._visibilityCache.push(object)
+      }
+    })
+  }
+}
+
+/**
  * How a scene is lit and finished. A scene's settings.look names what it wants; everything it leaves out comes from
  * these defaults, so a scene with no look still has soft studio light, a sun with soft shadows and ambient occlusion.
  */
@@ -107,7 +125,7 @@ export class LookRig {
     const target = new THREE.WebGLRenderTarget(Math.max(1, size.x), Math.max(1, size.y), { type: THREE.HalfFloatType, samples: 4 })
     this.composer = new EffectComposer(renderer, target)
     this.render = new RenderPass(scene, camera)
-    this.ao = new GTAOPass(scene, camera, Math.max(1, size.x), Math.max(1, size.y))
+    this.ao = new FoliageAwareGTAOPass(scene, camera, Math.max(1, size.x), Math.max(1, size.y))
     this.ao.output = GTAOPass.OUTPUT.Default
     this.bloom = new UnrealBloomPass(new THREE.Vector2(Math.max(1, size.x), Math.max(1, size.y)), 0.4, 0.5, 0.85)
     this.focus = new BokehPass(scene, camera, { focus: 10, aperture: 0.0001, maxblur: 0.01 })
@@ -173,7 +191,7 @@ export class LookRig {
     this.ao.updateGtaoMaterial({ radius: THREE.MathUtils.clamp(this.radius * 0.035, 0.15, 3), distanceFallOff: 1, thickness: 1 })
     this.bloom.enabled = look.bloom > 0
     this.bloom.strength = look.bloom * 0.6
-    this.bloom.threshold = 0.85
+    this.bloom.threshold = 0.97
     this.bloom.radius = 0.55
     this.focus.enabled = look.focusDistance > 0
     const uniformsFocus = (this.focus as unknown as { uniforms: Record<string, THREE.IUniform> }).uniforms

@@ -32,11 +32,11 @@ function drawLeaves(g: CanvasRenderingContext2D, x0: number, w: number, h: numbe
     g.quadraticCurveTo(x0 + w * (0.2 + random() * 0.6), h * 0.55, x0 + w * (0.1 + random() * 0.8), h * (0.08 + random() * 0.3))
     g.stroke()
   }
-  for (let i = 0; i < 95; i++) {
+  for (let i = 0; i < 60; i++) {
     const cx = x0 + w * (0.1 + random() * 0.8), cy = h * (0.06 + random() * 0.84)
     const dx = cx - (x0 + w / 2), dy = cy - h / 2
     if ((dx * dx) / (w * w * 0.2) + (dy * dy) / (h * h * 0.2) > 1) continue
-    const length = h * (0.07 + random() * 0.05), angle = random() * Math.PI * 2
+    const length = h * (0.1 + random() * 0.06), angle = random() * Math.PI * 2
     const shade = 130 + Math.floor(random() * 90)
     g.save()
     g.translate(cx, cy)
