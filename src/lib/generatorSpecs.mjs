@@ -11,6 +11,8 @@
  * @typedef {{ label: string, description: string, params: GeneratorParam[] }} GeneratorSpec
  */
 
+import { KIT_NAMES } from './kit.mjs'
+
 const seed = { key: 'seed', label: 'Seed', type: 'number', min: 0, max: 99999, step: 1, default: 1, hint: 'Another number makes another variation' }
 
 export const SCATTER_ITEMS = ['pine', 'fir', 'broadleaf', 'birch', 'bush', 'rock', 'grass', 'flowers', 'fern']
@@ -92,6 +94,112 @@ export const GENERATORS = {
       seed,
     ],
   },
+  building: {
+    label: 'Building',
+    description: 'A house, cabin or boathouse with real detail: lapped clapboard, board-and-batten, log or shingle siding (or plaster, brick, stone), corner boards, framed windows with sills, mullions and glass, a panelled door, a stone plinth, a gable, hip or shed roof of shingles or standing-seam metal with fascia and gutters, a chimney and a porch with railings and steps. Centred on its footprint, front towards +z, standing on y 0.',
+    params: [
+      { key: 'width', label: 'Width', type: 'number', min: 2, max: 40, default: 7, unit: 'm' },
+      { key: 'depth', label: 'Depth', type: 'number', min: 2, max: 40, default: 5, unit: 'm' },
+      { key: 'storeys', label: 'Storeys', type: 'number', min: 1, max: 4, step: 1, default: 1 },
+      { key: 'storeyHeight', label: 'Storey height', type: 'number', min: 2.2, max: 5, default: 2.7, unit: 'm' },
+      { key: 'siding', label: 'Siding', type: 'select', options: ['clapboard', 'boards', 'log', 'shingle', 'plaster', 'brick', 'stone'], default: 'clapboard' },
+      { key: 'sidingColor', label: 'Siding colour', type: 'color', default: '#8c5a3c' },
+      { key: 'trimColor', label: 'Trim colour', type: 'color', default: '#e8e2d4' },
+      { key: 'roof', label: 'Roof', type: 'select', options: ['gable', 'hip', 'shed'], default: 'gable' },
+      { key: 'roofing', label: 'Roofing', type: 'select', options: ['shingles', 'metal'], default: 'shingles' },
+      { key: 'roofColor', label: 'Roof colour', type: 'color', default: '#4a4541' },
+      { key: 'roofPitch', label: 'Roof pitch', type: 'number', min: 5, max: 60, default: 35, unit: '°' },
+      { key: 'overhang', label: 'Eaves overhang', type: 'number', min: 0, max: 1.5, default: 0.45, unit: 'm' },
+      { key: 'windowsFront', label: 'Front windows', type: 'number', min: 0, max: 8, step: 1, default: 2 },
+      { key: 'windowsSide', label: 'Side windows', type: 'number', min: 0, max: 8, step: 1, default: 1 },
+      { key: 'windowsBack', label: 'Back windows', type: 'number', min: 0, max: 8, step: 1, default: 2 },
+      { key: 'windowGlow', label: 'Lights on', type: 'number', min: 0, max: 3, step: 0.1, default: 0, hint: 'Warm light in the windows' },
+      { key: 'doorColor', label: 'Door colour', type: 'color', default: '#5b3a2a' },
+      { key: 'foundation', label: 'Plinth height', type: 'number', min: 0, max: 1.5, default: 0.45, unit: 'm' },
+      { key: 'porch', label: 'Porch', type: 'select', options: ['none', 'front'], default: 'none' },
+      { key: 'porchDepth', label: 'Porch depth', type: 'number', min: 1, max: 4, default: 1.8, unit: 'm' },
+      { key: 'chimney', label: 'Chimney', type: 'select', options: ['none', 'left', 'right'], default: 'right' },
+      { key: 'gutters', label: 'Gutters', type: 'select', options: ['yes', 'no'], default: 'yes' },
+      seed,
+    ],
+  },
+  boat: {
+    label: 'Rowing boat',
+    description: 'A clinker-built rowing boat with lapped strakes, ribs, thwarts, gunwales and oars. Bow towards +z; its keel sits on y 0, so on water lift it a few centimetres.',
+    params: [
+      { key: 'length', label: 'Length', type: 'number', min: 1.5, max: 8, default: 3.6, unit: 'm' },
+      { key: 'beam', label: 'Beam', type: 'number', min: 0.6, max: 2.5, default: 1.3, unit: 'm' },
+      { key: 'hullColor', label: 'Hull colour', type: 'color', default: '#2f4f5f' },
+      { key: 'insideColor', label: 'Inside colour', type: 'color', default: '#a07a52' },
+      { key: 'oars', label: 'Oars', type: 'select', options: ['yes', 'no'], default: 'yes' },
+      seed,
+    ],
+  },
+  dock: {
+    label: 'Jetty',
+    description: 'A timber jetty: deck planks with gaps on stringers and piles that run 1.4 m below y 0 into the water, a cleat and an optional ladder. Starts at z 0 and runs along +z; height is the deck above y 0.',
+    params: [
+      { key: 'length', label: 'Length', type: 'number', min: 1, max: 60, default: 6, unit: 'm' },
+      { key: 'width', label: 'Width', type: 'number', min: 0.6, max: 6, default: 1.6, unit: 'm' },
+      { key: 'height', label: 'Deck height', type: 'number', min: 0.1, max: 3, default: 0.5, unit: 'm' },
+      { key: 'wood', label: 'Wood', type: 'color', default: '#7d6248' },
+      { key: 'ladder', label: 'Ladder', type: 'select', options: ['yes', 'no'], default: 'yes' },
+      seed,
+    ],
+  },
+  fence: {
+    label: 'Fence',
+    description: 'A run of fence along x, centred: picket, rail or post-and-rail, with posts about every 2 m.',
+    params: [
+      { key: 'length', label: 'Length', type: 'number', min: 0.5, max: 100, default: 6, unit: 'm' },
+      { key: 'height', label: 'Height', type: 'number', min: 0.4, max: 2.5, default: 1.1, unit: 'm' },
+      { key: 'style', label: 'Style', type: 'select', options: ['picket', 'rail'], default: 'picket' },
+      { key: 'color', label: 'Colour', type: 'color', default: '#e6e1d6' },
+      seed,
+    ],
+  },
+  lantern: {
+    label: 'Lantern',
+    description: 'A hurricane lantern with a metal frame round a glass chimney; glow lights it (pair with look.bloom).',
+    params: [
+      { key: 'height', label: 'Height', type: 'number', min: 0.1, max: 2, default: 0.35, unit: 'm' },
+      { key: 'metal', label: 'Metal', type: 'color', default: '#3a3a38' },
+      { key: 'glow', label: 'Glow', type: 'number', min: 0, max: 4, step: 0.1, default: 1.5 },
+    ],
+  },
+  crate: {
+    label: 'Crate',
+    description: 'A planked wooden crate with corner battens and a diagonal brace.',
+    params: [
+      { key: 'size', label: 'Size', type: 'number', min: 0.2, max: 3, default: 0.6, unit: 'm' },
+      { key: 'wood', label: 'Wood', type: 'color', default: '#a07c55' },
+      seed,
+    ],
+  },
+  barrel: {
+    label: 'Barrel',
+    description: 'A coopered barrel of bulging staves held by iron hoops.',
+    params: [
+      { key: 'height', label: 'Height', type: 'number', min: 0.2, max: 3, default: 0.9, unit: 'm' },
+      { key: 'wood', label: 'Wood', type: 'color', default: '#80583a' },
+      seed,
+    ],
+  },
+  bench: {
+    label: 'Bench',
+    description: 'A garden bench of wooden slats on two metal frames, with a back. Seat faces +z.',
+    params: [
+      { key: 'length', label: 'Length', type: 'number', min: 0.6, max: 5, default: 1.6, unit: 'm' },
+      { key: 'wood', label: 'Wood', type: 'color', default: '#8f6a45' },
+      { key: 'frame', label: 'Frame', type: 'color', default: '#2e2f30' },
+      seed,
+    ],
+  },
+  model: {
+    label: 'Kit model',
+    description: 'A ready-made CC0 model from the bundled kit (Poly Haven), placed by name at real size with its own textures; material settings do not apply to it.',
+    params: [{ key: 'name', label: 'Model', type: 'select', options: KIT_NAMES, default: 'barrel' }],
+  },
   roundedBox: {
     label: 'Rounded box',
     description: 'A unit box with softened edges, for product and architectural shapes; size it with scale.',
@@ -102,7 +210,7 @@ export const GENERATORS = {
   },
 }
 
-export const GENERATOR_KINDS = /** @type {const} */ (['terrain', 'scatter', 'tree', 'rock', 'water', 'roundedBox'])
+export const GENERATOR_KINDS = /** @type {const} */ (['terrain', 'scatter', 'tree', 'rock', 'water', 'roundedBox', 'building', 'boat', 'dock', 'fence', 'lantern', 'crate', 'barrel', 'bench', 'model'])
 
 /**
  * A generator's parameters with every default filled in. Unknown keys are dropped.

@@ -22,6 +22,31 @@ camera, raise its `avoid` radius, shrink its area or put the camera in the
 clearing, rather than hiding the scatter. Scatters keep out of water on their
 own, and water mirrors what stands around it.
 
+Made things are generated as well, in parts that each have their own material
+(siding, trim, roof, glass, stone, metal), so they hold up in close-ups:
+`building` (clapboard, board-and-batten, log, shingle, plaster, brick or stone
+siding; framed windows with sills and mullions; a panelled door; a stone plinth;
+a gable, hip or shed roof in shingles or standing-seam metal with fascia and
+gutters; a chimney; a porch with railings and steps; `windowGlow` lights the
+windows), `boat`, `dock`, `fence`, `lantern`, `crate`, `barrel` and `bench`.
+Build houses, cabins, boathouses and their props from these, not from boxes.
+
+Kit models are ready-made CC0 models from Poly Haven bundled with the app
+(`public/kit`, credits in `public/kit/CREDITS.md`). Add one with kind `model`
+and `params.name` (barrel, crate-large, bucket, lantern-wooden, oil-lamp,
+rocking-chair, picnic-table, ladder, lifebuoy, tree-stump, fallen-branches,
+fern-clump, mossy-rocks and more; the `editScene` description lists them with
+sizes). They load from the app, so scenes stay small, and they keep their own
+textures, so material settings do not apply to them.
+
+**Detail pass.** After the first good wide render, take close-up captures of
+the main subject from a few metres away, then add what makes it read as real at
+that distance: trim, sills, gutters, a porch and steps, a chimney; props by
+doors and on decks (kit models, lanterns, crates, barrels, benches); weathering
+through colour variation; and clutter where things meet the ground (kit stones,
+branches, ferns, stumps). Repeat until the close-ups hold up, then go back to
+the hero shots.
+
 Surfaces give any material real-world detail without UVs: `material.surface`
 is one of `wood`, `planks`, `stone`, `concrete`, `plaster`, `brick`, `tiles`,
 `metal`, `fabric`, `leather`, `marble`, `bark`, `ground` or `sand`, laid over

@@ -7,6 +7,8 @@ import type { SceneDocument, SceneObject } from '../types'
 
 export type ImportedModel = SceneObject[] & {
   textureAssets: SceneDocument['textureAssets']
+  /** Texture maps other than base colour that the model had and the scene does not keep (normalMap, roughnessMap…). */
+  droppedMaps: Set<string>
 }
 
 export function assertSelfContainedGLB(data: ArrayBuffer) {
@@ -50,6 +52,8 @@ export function objectsFromModel(
     { asset: SceneDocument['textureAssets'][number]; binding: ReturnType<typeof textureFromMap>['binding'] }
   >()
   Object.defineProperty(objects, 'textureAssets', { value: [], enumerable: false })
+  const droppedMaps = new Set<string>()
+  Object.defineProperty(objects, 'droppedMaps', { value: droppedMaps, enumerable: false })
   const visit = (node: THREE.Object3D, parentId: string | null) => {
     if (
       node instanceof THREE.SkinnedMesh ||
@@ -66,14 +70,10 @@ export function objectsFromModel(
       const materials: THREE.Material[] = Array.isArray(node.material)
         ? node.material
         : [node.material]
-      if (
-        materials.some(m =>
-          Object.entries(m).some(
-            ([key, value]) => value instanceof THREE.Texture && key !== 'map',
-          ),
-        )
-      )
-        throw new Error('Only base-color texture maps can be imported')
+      // Scenes keep base-color maps only: normal, roughness and other maps are left out (and counted).
+      for (const material of materials)
+        for (const [key, value] of Object.entries(material))
+          if (value instanceof THREE.Texture && key !== 'map') droppedMaps.add(key)
       const source = node.geometry as THREE.BufferGeometry
       const geometries =
         materials.length > 1

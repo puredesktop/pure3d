@@ -140,6 +140,7 @@ export function createToolHandlers(
       const objectIds = await importWorkspaceModel(store, args.path)
       return committed(before, {
         ...cappedIds('importedObjectIds', objectIds),
+        ...(objectIds.droppedMaps.length ? { droppedMaps: objectIds.droppedMaps } : {}),
         selectedId: store.getSnapshot().selectedId,
       })
     }),
