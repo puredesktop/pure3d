@@ -216,7 +216,7 @@ export async function importWorkspaceModel(store: SceneStore, path: string) {
     ...objects.map(object => ({ op: 'add' as const, object })),
   ])
   store.workspace({ selectedId: objects[0].id })
-  return objects.map(o => o.id)
+  return Object.assign(objects.map(o => o.id), { droppedMaps: [...(objects.droppedMaps ?? [])] })
 }
 export async function exportWorkspaceModel(
   store: SceneStore,

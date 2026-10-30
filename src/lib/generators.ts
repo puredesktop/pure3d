@@ -6,6 +6,7 @@ import { generatorParams } from './generatorSpecs.mjs'
 import { leafAtlas, ATLAS } from './leafAtlas'
 import { dressWater } from './water'
 import { extendShader } from './shaderHooks'
+import { structureGeometry } from './structures'
 import type { SceneDocument, SceneObject } from '../types'
 
 /**
@@ -42,7 +43,7 @@ const color = (hex: string) => new THREE.Color(hex)
  * vertex samples (the solid patch by default); null keeps the part's own UVs (cards). surface: 1 where the material's
  * surface (bark, stone) shows, 0 where it does not (leaf cards and the dark inner canopy).
  */
-function prepare(geometry: THREE.BufferGeometry, tint: THREE.Color | ((p: THREE.Vector3, n: THREE.Vector3) => THREE.Color), uv: readonly [number, number] | null = ATLAS.solid, surface = uv ? 1 : 0): THREE.BufferGeometry {
+export function prepare(geometry: THREE.BufferGeometry, tint: THREE.Color | ((p: THREE.Vector3, n: THREE.Vector3) => THREE.Color), uv: readonly [number, number] | null = ATLAS.solid, surface = uv ? 1 : 0): THREE.BufferGeometry {
   const g = geometry.index ? geometry.toNonIndexed() : geometry
   if (g !== geometry) geometry.dispose()
   if (!g.getAttribute('normal')) g.computeVertexNormals()
@@ -596,6 +597,8 @@ export function generatedGeometry(object: SceneObject): THREE.BufferGeometry {
     case 'rock': return rock(num(params, 'size'), num(params, 'roughness'), num(params, 'flatness'), str(params, 'stone'), num(params, 'moss'), num(params, 'seed'))
     case 'water': return water(params)
     case 'roundedBox': return new RoundedBoxGeometry(1, 1, 1, Math.round(num(params, 'segments')), Math.min(num(params, 'radius'), 0.5))
+    case 'building': case 'boat': case 'dock': case 'fence': case 'lantern': case 'crate': case 'barrel': case 'bench':
+      return structureGeometry(object.kind, params)
     default: throw new Error(`${object.kind} is not a generated shape`)
   }
 }

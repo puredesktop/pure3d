@@ -54,6 +54,13 @@ import {
   Gem,
   Waves,
   Squircle,
+  House,
+  Sailboat,
+  Fence,
+  Lamp,
+  Package,
+  Armchair,
+  Shapes,
 } from 'lucide-react'
 import { GENERATORS } from '../lib/generatorSpecs.mjs'
 import { Choice } from './Controls'
@@ -100,6 +107,15 @@ const SHAPES = [
   'tree',
   'rock',
   'water',
+  'building',
+  'boat',
+  'dock',
+  'fence',
+  'lantern',
+  'crate',
+  'barrel',
+  'bench',
+  'model',
 ] as const
 const shapeLabel = (kind: string) => GENERATORS[kind]?.label ?? kind[0].toUpperCase() + kind.slice(1)
 const SCENE_SUFFIXES = ['.pure3d']
@@ -128,6 +144,15 @@ const icons = {
   rock: Gem,
   water: Waves,
   roundedBox: Squircle,
+  building: House,
+  boat: Sailboat,
+  dock: Waypoints,
+  fence: Fence,
+  lantern: Lamp,
+  crate: Package,
+  barrel: Cylinder,
+  bench: Armchair,
+  model: Shapes,
 }
 const basename = (title: string) =>
   title
