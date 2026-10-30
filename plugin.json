@@ -49,7 +49,7 @@
       "tools": [
         {
           "name": "getScene",
-          "description": "Read the active scene, file path, selection and playback. This is the only tool that returns scene detail: change tools reply with a short summary (ids, counts, path), so read here only what the next step needs. With no arguments it returns the complete scene. Narrow it with ids (includeDescendants:true adds each subtree), kinds, name (case-insensitive substring) and within (axis-aligned box tested against each object's world-space origin from its saved transforms, ignoring animation); filters combine with AND, keyframes are limited to the returned objects, and match reports counts and unknown ids. geometry:false replaces mesh arrays with vertex/triangle counts. summary:true returns counts by kind, settings, texture asset ids and an outline of id/name/kind/parentId per object instead of full objects (default limit 200; limit caps the returned objects in either mode and objectsMore reports the rest). Prefer summary:true or filters on large scenes. Embedded texture dataUrl bytes are always omitted. Rotations are XYZ Euler radians, time is seconds, positions use meters. Objects are box/sphere/cylinder/cone/torus/plane/group/mesh; primitives have unit size.",
+          "description": "Read the active scene, file path, selection and playback. This is the only tool that returns scene detail: change tools reply with a short summary (ids, counts, path), so read here only what the next step needs. With no arguments it returns the complete scene. Narrow it with ids (includeDescendants:true adds each subtree), kinds, name (case-insensitive substring) and within (axis-aligned box tested against each object's world-space origin from its saved transforms, ignoring animation); filters combine with AND, keyframes are limited to the returned objects, and match reports counts and unknown ids. geometry:false replaces mesh arrays with vertex/triangle counts. summary:true returns counts by kind, settings, texture asset ids and an outline of id/name/kind/parentId per object instead of full objects (default limit 200; limit caps the returned objects in either mode and objectsMore reports the rest). Prefer summary:true or filters on large scenes. Embedded texture dataUrl bytes are always omitted. Rotations are XYZ Euler radians, time is seconds, positions use meters. Objects are box/sphere/cylinder/cone/torus/plane/group/mesh (primitives have unit size) or generated shapes (terrain/scatter/tree/rock/water/roundedBox) that carry params instead of triangles. settings.look holds the scene's light and finish.",
           "risk": "read",
           "requiresApproval": false,
           "inputSchema": {
@@ -70,7 +70,7 @@
               },
               "kinds": {
                 "minItems": 1,
-                "maxItems": 8,
+                "maxItems": 20,
                 "type": "array",
                 "items": {
                   "type": "string",
@@ -82,7 +82,13 @@
                     "torus",
                     "plane",
                     "group",
-                    "mesh"
+                    "mesh",
+                    "terrain",
+                    "scatter",
+                    "tree",
+                    "rock",
+                    "water",
+                    "roundedBox"
                   ]
                 }
               },
@@ -146,7 +152,7 @@
         },
         {
           "name": "editScene",
-          "description": "Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings. Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.",
+          "description": "Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings; settings.look merges with the current look. GENERATED SHAPES make natural, detailed scenes from a few numbers; prefer them to stacking primitives. Add one with kind, params (any omitted take their defaults) and geometry:null, material {} (vertex colours carry the colour; material.color tints). update with patch.params changes only the named params. terrain: Rolling ground from noise, coloured by height and slope (grass, soil, rock, snow), with an optional flat clearing in the middle. params width=60, depth=60, height=4, feature=18, roughness=0.45, clearing=0, segments=160, grass=\"#5b7f35\", soil=\"#7a6247\", rock=\"#80786d\", snow=\"#f2f4f7\", snowLine=1, seed=1. scatter: Many instances of one item (trees, rocks, grass, flowers) spread over an area or over a terrain, each varied in size, turn and colour. params item(pine|fir|broadleaf|birch|bush|rock|grass|flowers|fern)=\"pine\", count=120, width=40, depth=40, on=\"\", minScale=0.7, maxScale=1.4, avoid=0, clumping=0.4, maxSlope=35, variation=0.35, color=\"#ffffff\", seed=1. tree: One tree or bush with a tapered trunk and leafy canopy. params style(pine|fir|broadleaf|birch|bush)=\"broadleaf\", height=7, leaves=\"#4f7a2c\", bark=\"#5a4330\", fullness=1, seed=1. rock: A weathered boulder with moss on its upper faces. params size=1.2, roughness=0.5, flatness=0.35, stone=\"#8a8478\", moss=0.35, seed=1. water: A pond, lake or sea surface with gentle waves that reflects the sky. params width=12, depth=12, shape(round|square)=\"round\", waves=0.15, water=\"#1f5566\", seed=1. roundedBox: A unit box with softened edges, for product and architectural shapes; size it with scale. params radius=0.08, segments=4. A scatter with on:<terrain id> sits on that terrain's surface; give terrain a clearing and the scatter an avoid radius for an open glade. A terrain's centre is at y 0, so objects in its clearing stand at y 0. If a scatter blocks the camera, raise its avoid radius, shrink its area or move the camera into the clearing, rather than hiding it. LOOK (settings.look, all optional): environment sky|studio (sky = physical sky with clouds; studio = soft studio light on settings.background); sunElevation degrees (-12..90; 5-15 golden hour, below 0 dusk), sunAzimuth degrees (0 = +Z, 90 = +X; light from the side of the camera, not behind it), sunIntensity (3), sunColor (#rrggbb, default follows elevation), environmentIntensity (1), haze 0-1, clouds 0-1, shadows soft|sharp|off, fog 0-1 (sized to the scene), fogColor, exposure (1), ambientOcclusion 0-2 (1, contact shadows), bloom 0-3 (glow on bright and emissive things), focusDistance metres (0 = all sharp) with aperture 0-1 for background blur. MATERIALS also take emissive (#rrggbb) with emissiveIntensity for lamps and glows, clearcoat 0-1 (car paint, lacquer), transmission 0-1 (glass, water), sheen 0-1 (fabric). Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -328,7 +334,13 @@
                                 "torus",
                                 "plane",
                                 "group",
-                                "mesh"
+                                "mesh",
+                                "terrain",
+                                "scatter",
+                                "tree",
+                                "rock",
+                                "water",
+                                "roundedBox"
                               ]
                             },
                             "parentId": {
@@ -485,6 +497,30 @@
                                       "type": "null"
                                     }
                                   ]
+                                },
+                                "emissive": {
+                                  "type": "string",
+                                  "pattern": "^#[\\da-f]{6}$"
+                                },
+                                "emissiveIntensity": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "clearcoat": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "transmission": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "sheen": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
                                 }
                               },
                               "additionalProperties": false
@@ -537,6 +573,23 @@
                                   "type": "null"
                                 }
                               ]
+                            },
+                            "params": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  }
+                                ]
+                              }
                             }
                           },
                           "required": [
@@ -722,9 +775,50 @@
                                       "type": "null"
                                     }
                                   ]
+                                },
+                                "emissive": {
+                                  "type": "string",
+                                  "pattern": "^#[\\da-f]{6}$"
+                                },
+                                "emissiveIntensity": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "clearcoat": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "transmission": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "sheen": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
                                 }
                               },
                               "additionalProperties": false
+                            },
+                            "params": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  }
+                                ]
+                              }
                             }
                           },
                           "additionalProperties": false
@@ -1094,6 +1188,95 @@
                                 "target"
                               ],
                               "additionalProperties": false
+                            },
+                            "look": {
+                              "type": "object",
+                              "properties": {
+                                "environment": {
+                                  "type": "string",
+                                  "enum": [
+                                    "sky",
+                                    "studio"
+                                  ]
+                                },
+                                "sunElevation": {
+                                  "type": "number",
+                                  "minimum": -12,
+                                  "maximum": 90
+                                },
+                                "sunAzimuth": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 360
+                                },
+                                "sunIntensity": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 20
+                                },
+                                "sunColor": {
+                                  "type": "string",
+                                  "pattern": "^#[\\da-f]{6}$"
+                                },
+                                "environmentIntensity": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 5
+                                },
+                                "haze": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "clouds": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "shadows": {
+                                  "type": "string",
+                                  "enum": [
+                                    "off",
+                                    "sharp",
+                                    "soft"
+                                  ]
+                                },
+                                "fog": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "fogColor": {
+                                  "type": "string",
+                                  "pattern": "^#[\\da-f]{6}$"
+                                },
+                                "exposure": {
+                                  "type": "number",
+                                  "minimum": 0.05,
+                                  "maximum": 5
+                                },
+                                "ambientOcclusion": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 2
+                                },
+                                "bloom": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 3
+                                },
+                                "focusDistance": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 5000
+                                },
+                                "aperture": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                }
+                              },
+                              "additionalProperties": false
                             }
                           },
                           "additionalProperties": false
@@ -1429,7 +1612,7 @@
         },
         {
           "name": "exportModel",
-          "description": "Export GLB with baked transform animation, OBJ/STL geometry of the current pose, or the actual viewport PNG, to an explicit workspace path. Extension must match format. Geometry exports exclude hidden objects, helpers and gizmos. PNG includes visible viewport controls.",
+          "description": "Export GLB with baked transform animation, OBJ/STL geometry of the current pose, or a finished PNG render (as captureViewport, without gizmos), to an explicit workspace path. Extension must match format. Geometry exports exclude hidden objects, helpers and gizmos; OBJ and STL export a scatter's item once, GLB keeps its instances.",
           "risk": "write",
           "requiresApproval": false,
           "inputSchema": {
@@ -1482,7 +1665,7 @@
         },
         {
           "name": "captureViewport",
-          "description": "Read an actual rendered viewport PNG of the active scene at the current playhead. Draws a fresh frame first, at the on-screen size or, while Pure3D is hidden, at its last known size (1280x720 if never shown). Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the viewport cannot be drawn (unsized canvas or fully transparent pixels); capture again once Pure3D is on screen, or use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data.",
+          "description": "Read a finished render of the active scene as a PNG at the current playhead: the scene's look (sky, sun shadows, fog, contact shadows, glow, focus), rendered off screen at twice the size and scaled down, without gizmos or the selection box. Uses the on-screen size or, while Pure3D is hidden, its last known size (1280x720 if never shown), so it works while hidden. Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the render comes back empty; then use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data.",
           "risk": "read",
           "requiresApproval": false,
           "requiresCapabilities": [

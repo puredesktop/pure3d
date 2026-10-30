@@ -3,8 +3,35 @@
 Tools operate directly on the active 3D workspace. Use `3d.getScene` to inspect
 content and find object IDs. Edits need only their operations or object IDs;
 consecutive edits do not require rereading the scene. Objects use
-unit-size primitive geometry, meter positions, XYZ Euler rotations in radians,
-and positive scales. Keyframe times are seconds.
+unit-size primitive geometry or generated shapes, meter positions, XYZ Euler
+rotations in radians, and positive scales. Keyframe times are seconds.
+
+## Making it look good
+
+Build natural and detailed things from generated shapes, not stacks of
+primitives: `terrain` (rolling ground coloured by height and slope, with an
+optional flat `clearing`), `scatter` (hundreds or thousands of pines, firs,
+broadleaf trees, birches, bushes, rocks, grass, flowers or ferns over an area,
+or over a terrain with `on: <terrain id>`, leaving an `avoid` radius empty),
+`tree`, `rock`, `water` and `roundedBox`. Each is an `add` with `kind`,
+`params` and `geometry: null`; omitted params take their defaults, the same
+`seed` always makes the same shape, and `update` with `patch.params` changes
+only the params it names. The `editScene` description lists every param. A terrain's centre
+is at y = 0, so things in its clearing stand at y = 0. If a scatter blocks the
+camera, raise its `avoid` radius, shrink its area or put the camera in the
+clearing, rather than hiding the scatter.
+
+Light and finish live in `settings.look`, merged on each `settings` edit:
+`environment` `sky` (physical sky with clouds and a sun) or `studio` (soft
+studio light on the background colour); `sunElevation` and `sunAzimuth` in
+degrees (5-15 is golden hour; put the sun to the side of the camera, not
+behind it, so shadows show); `sunIntensity`, `haze`, `clouds`, `shadows`
+(`soft`, `sharp`, `off`), `fog` 0-1 (sized to the scene, coloured like the
+horizon), `exposure`, `ambientOcclusion` (contact shadows), `bloom` (glow on
+bright and emissive surfaces), and `focusDistance` with `aperture` for a
+blurred background. Materials also take `emissive` with `emissiveIntensity`,
+`clearcoat`, `transmission` and `sheen`. Turn the grid off for finished
+shots, frame with a camera shot, then look with `captureViewport`.
 
 ## Replies and reading the scene
 
@@ -20,10 +47,10 @@ at 25 entries; `addedMore`, `updatedMore`, `removedMore` (and
 the rest. `setWorkspace` returns the workspace state and the selected object;
 `openScene` adds an outline of the first 20 objects; `history` describes the
 step it undid or redid and the next five undo and redo entries;
-`captureViewport` returns the image with a one-line note. It draws a fresh
-frame first, even while Pure3D's tab is hidden; if the viewport still cannot be
-drawn it returns an error and no image instead of a blank picture. Capture again
-once Pure3D is on screen, or read the scene with `getScene`.
+`captureViewport` returns the image with a one-line note. It renders a
+finished still off screen in the scene's look (no gizmos), so it works while
+Pure3D's tab is hidden; if the render comes back empty it returns an error and
+no image instead of a blank picture. Then read the scene with `getScene`.
 
 Read only what the next step needs. `getScene` with no arguments returns the
 whole scene, which is large on real scenes. On anything beyond a few objects,
@@ -99,6 +126,6 @@ saves outgoing content first. Use paths returned by tools.
 Import static OBJ/STL or self-contained GLB. GLB retains base-color image
 textures and primary UVs; other maps, skeletal rigs, morphs and imported clips
 are unsupported. Export GLB for textures and object-transform animation,
-OBJ/STL for current-pose geometry, or PNG for the rendered viewport. A
+OBJ/STL for current-pose geometry, or PNG for a finished render. A
 successful geometry export does not prove the scene's visual appearance;
 vision-capable assistants can inspect `3d.captureViewport` when needed.

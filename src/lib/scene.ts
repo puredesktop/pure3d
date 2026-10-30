@@ -1,4 +1,5 @@
 import { sceneSchema, operationSchema } from './schemas.mjs'
+import { GENERATOR_KINDS, generatorParams } from './generatorSpecs.mjs'
 import { meshGeometry, moveVertex, boxUV } from './geometry'
 import type {
   SceneDocument,
@@ -16,6 +17,11 @@ export type ResolvedMaterial = {
   opacity: number
   wireframe: boolean
   texture: NonNullable<SceneObject['material']['texture']> | null
+  emissive?: string
+  emissiveIntensity?: number
+  clearcoat?: number
+  transmission?: number
+  sheen?: number
 }
 const defaultMaterial: ResolvedMaterial = {
   color: '#7b9dcc',
@@ -24,6 +30,13 @@ const defaultMaterial: ResolvedMaterial = {
   opacity: 1,
   wireframe: false,
   texture: null,
+}
+/** Generated objects carry their own colours (vertex colours), so their default tint is white and they are matte. */
+export function defaultMaterialFor(kind: SceneObject['kind']): Partial<ResolvedMaterial> {
+  return isGenerated(kind) ? { color: '#ffffff', metalness: 0, roughness: kind === 'water' ? 0.06 : 0.85 } : {}
+}
+export function isGenerated(kind: SceneObject['kind']): boolean {
+  return (GENERATOR_KINDS as readonly string[]).includes(kind)
 }
 
 export function resolveMaterial(scene: SceneDocument, object: SceneObject): ResolvedMaterial {
@@ -35,7 +48,7 @@ export function resolveMaterial(scene: SceneDocument, object: SceneObject): Reso
       ? scene.objects.find(candidate => candidate.id === current!.parentId)
       : undefined
   }
-  const resolved = { ...defaultMaterial }
+  const resolved = { ...defaultMaterial, ...defaultMaterialFor(object.kind) }
   for (const entry of chain) {
     const { texture, ...properties } = entry.material
     Object.assign(resolved, properties)
@@ -91,6 +104,7 @@ export function makeObject(
     transform: identityTransform(),
     material: {},
     geometry: null,
+    ...(isGenerated(kind) ? { params: generatorParams(kind) } : {}),
   }
 }
 export function emptyScene(title = 'Untitled scene'): SceneDocument {
@@ -219,9 +233,10 @@ export function applyOperations(
         break
       case 'update': {
         const o = find(op.id)
-        const { transform, material, ...fields } = op.patch
+        const { transform, material, params, ...fields } = op.patch
         Object.assign(o, fields)
         if (transform) Object.assign(o.transform, transform)
+        if (params) o.params = { ...(o.params ?? {}), ...params }
         if (material) {
           const { texture, ...properties } = material
           Object.assign(o.material, properties)
@@ -329,7 +344,12 @@ export function applyOperations(
         break
       case 'settings':
         if (op.title !== undefined) next.title = op.title
-        if (op.settings) Object.assign(next.settings, op.settings)
+        if (op.settings) {
+          const { look, ...settings } = op.settings
+          Object.assign(next.settings, settings)
+          // A look patch changes the fields it names and keeps the rest.
+          if (look) next.settings.look = { ...(next.settings.look ?? {}), ...look }
+        }
         break
     }
   }
