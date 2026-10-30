@@ -10,6 +10,8 @@ import { useSyncExternalStore } from 'react'
 import { descendants, pose, transformOperations } from '../lib/scene'
 import { MeshInspector } from './MeshInspector'
 import { MaterialInspector } from './MaterialInspector'
+import { GeneratorInspector, LookInspector } from './LookInspector'
+import { isGenerated } from '../lib/scene'
 import type { SceneStore, WorkspaceState } from '../lib/SceneStore'
 import type { SceneObject, Vec3, Operation } from '../types'
 import { useSceneState } from '../hooks/useSceneState'
@@ -73,6 +75,7 @@ export function Inspector({
             checked={state.scene.settings.grid}
             onChange={grid => edit([{ op: 'settings', settings: { grid } }])}
           />
+          <LookInspector scene={state.scene} edit={edit} />
           <SidebarSectionLabel>Camera</SidebarSectionLabel>
           {(['position', 'target'] as const).map(property => (
             <div key={property}>
@@ -243,7 +246,8 @@ function ObjectInspector({
           </div>
         </div>
       ))}
-      {object.kind !== 'group' && (
+      {isGenerated(object.kind) && <GeneratorInspector object={object} scene={state.scene} edit={edit} />}
+      {object.kind !== 'group' && !isGenerated(object.kind) && (
         <>
           <MeshInspector
             object={object}

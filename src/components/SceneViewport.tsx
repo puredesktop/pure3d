@@ -13,6 +13,7 @@ import { transformOperations } from '../lib/scene'
 import { VertexHandles } from '../lib/VertexHandles'
 import type { Vec3 } from '../types'
 import { demandRenderer } from '../lib/demandRenderer'
+import { LookRig, resolveLook } from '../lib/look'
 import { cameraPose } from '../lib/cameraTrack'
 import {
   platformViewportTheme,
@@ -62,8 +63,6 @@ export const SceneViewport = memo(function SceneViewport({
     }
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
     renderer.outputColorSpace = THREE.SRGBColorSpace
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.25
     renderer.domElement.setAttribute('aria-label', '3D scene viewport')
     renderer.domElement.setAttribute('tabindex', '0')
     element.appendChild(renderer.domElement)
@@ -73,19 +72,15 @@ export const SceneViewport = memo(function SceneViewport({
     orbit.enableDamping = false
     const gizmo = new TransformControls(camera, renderer.domElement)
     gizmo.setSize(0.85)
-    scene.add(gizmo.getHelper())
+    // Editing helpers are drawn over the finished frame: no shadows, fog or blur on them.
+    const overlay = new THREE.Scene()
+    overlay.add(gizmo.getHelper())
     const grid = new THREE.GridHelper(30, 30, '#a2aebc', '#c9d1db')
     scene.add(grid)
     const axes = new THREE.AxesHelper(1.5)
     axes.position.y = 0.002
     scene.add(axes)
-    scene.add(new THREE.HemisphereLight('#ffffff', '#7a8a9e', 2.5))
-    const keyLight = new THREE.DirectionalLight('#ffffff', 3)
-    keyLight.position.set(4, 8, 6)
-    scene.add(keyLight)
-    const fill = new THREE.DirectionalLight('#bcd4ff', 1.2)
-    fill.position.set(-5, 3, -4)
-    scene.add(fill)
+    const rig = new LookRig(renderer, scene, camera)
     let document = store.getContentSnapshot()
     const built = createSceneReconciler(document)
     scene.add(built.root)
@@ -104,18 +99,55 @@ export const SceneViewport = memo(function SceneViewport({
       lastSize = { width, height }
       return lastSize
     }
+    /** The area the frame fills: all of it, or a centred 16:9 shot while previewing the camera. */
+    const frameArea = ({ width, height }: Size) => {
+      const preview = store.getSnapshot().cameraPreview
+      const w = preview ? Math.min(width, height * 16 / 9) : width
+      return { w, h: preview ? w * 9 / 16 : height }
+    }
+    let composerSize = ''
+    const sizeComposer = (w: number, h: number, ratio: number) => {
+      const key = `${Math.round(w)}x${Math.round(h)}@${ratio}`
+      if (key === composerSize) return
+      rig.setSize(Math.round(w), Math.round(h), ratio)
+      composerSize = key
+    }
     const renderView = (size: Size | null = viewSize()) => {
       if (!size) return
       const { width, height } = size
-      const preview = store.getSnapshot().cameraPreview
-      const w = preview ? Math.min(width, height * 16 / 9) : width
-      const h = preview ? w * 9 / 16 : height
+      const { w, h } = frameArea(size)
       camera.aspect = w / h; camera.updateProjectionMatrix()
       renderer.setScissorTest(false); renderer.setViewport(0, 0, width, height); renderer.setClearColor('#151515'); renderer.clear()
+      sizeComposer(w, h, renderer.getPixelRatio())
       renderer.setViewport((width - w) / 2, (height - h) / 2, w, h)
       renderer.setScissor((width - w) / 2, (height - h) / 2, w, h); renderer.setScissorTest(true)
-      renderer.render(scene, camera)
+      rig.draw(true)
+      if (overlay.children.some(helper => helper.visible)) {
+        renderer.autoClear = false
+        renderer.clearDepth()
+        renderer.render(overlay, camera)
+        renderer.autoClear = true
+      }
       renderer.setScissorTest(false)
+    }
+    // Stills render off screen, so they work while Pure3D is hidden too.
+    const renderStill = (size: Size): string => {
+      const { w, h } = frameArea(size)
+      const width = Math.max(1, Math.round(w)), height = Math.max(1, Math.round(h))
+      camera.aspect = width / height; camera.updateProjectionMatrix()
+      try {
+        return rig.still(width, height)
+      } finally {
+        composerSize = ''
+      }
+    }
+    let lookKey: unknown[] = []
+    const applyLook = () => {
+      const background = resolveViewportBackground(document.settings.background, viewportTheme)
+      if (lookKey[0] === document && lookKey[1] === background) return
+      lookKey = [document, background]
+      built.root.updateMatrixWorld(true)
+      rig.apply(resolveLook(document), background, new THREE.Box3().setFromObject(built.root))
     }
     let disposed = false
     const watchTextures = () => {
@@ -171,9 +203,7 @@ export const SceneViewport = memo(function SceneViewport({
         cameraSignature = signature
         orbit.update()
       }
-      scene.background = new THREE.Color(
-        resolveViewportBackground(document.settings.background, viewportTheme),
-      )
+      applyLook()
       orbit.enabled = !state.cameraPreview
       grid.visible = document.settings.grid && !state.cameraPreview
       axes.visible = document.settings.grid && !state.cameraPreview
@@ -189,7 +219,7 @@ export const SceneViewport = memo(function SceneViewport({
         vertices?.dispose()
         vertices = null
         if (box) {
-          scene.remove(box)
+          overlay.remove(box)
           disposeScene(box)
           box = null
         }
@@ -208,7 +238,7 @@ export const SceneViewport = memo(function SceneViewport({
             )
           gizmo.attach(vertices?.pivot ?? node)
           box = new THREE.BoxHelper(node, '#6888b2')
-          scene.add(box)
+          overlay.add(box)
         }
       }
       gizmo.getHelper().visible = !!gizmo.object && !state.playing && !state.cameraPreview
@@ -363,21 +393,18 @@ export const SceneViewport = memo(function SceneViewport({
         }
         orbit.update()
         box?.update()
-        // Draw a fresh frame at the on-screen size, or, while the tab is hidden,
-        // at the last known (or a fixed) size, so the buffer is never stale.
+        // Render a fresh still at the on-screen size, or, while the tab is hidden,
+        // at the last known (or a fixed) size, off screen so it never comes back blank.
         const size = viewSize() ?? lastSize ?? FALLBACK_CAPTURE_SIZE
-        const buffer = renderer.getSize(new THREE.Vector2())
-        if (buffer.x !== size.width || buffer.y !== size.height)
-          renderer.setSize(size.width, size.height, false)
         let image: string
         try {
-          renderView(size)
-          image = renderer.domElement.toDataURL('image/png')
+          applyLook()
+          image = renderStill(size)
         } finally {
           updatePose(document, built.objects, store.getSnapshot().time)
           cameraSignature = ''; refresh()
         }
-        if (await isBlankCapture(renderer.domElement, image, decodeCapturePixels))
+        if (await isBlankCapture(size, image, decodeCapturePixels))
           throw new Error(BLANK_CAPTURE_MESSAGE)
         return image
       },
@@ -446,6 +473,7 @@ export const SceneViewport = memo(function SceneViewport({
       gizmo.dispose()
       vertices?.dispose()
       built.dispose()
+      rig.dispose()
       disposeScene(grid)
       disposeScene(axes)
       if (box) disposeScene(box)

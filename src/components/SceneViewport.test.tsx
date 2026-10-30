@@ -22,7 +22,7 @@ vi.mock('three', async importOriginal => {
   const real = await importOriginal<typeof import('three')>()
   class Renderer {
     domElement = document.createElement('canvas')
-    setPixelRatio() {}; setScissorTest() {}
+    setPixelRatio() {}; getPixelRatio() { return 1 }; setScissorTest() {}; clearDepth() {}; autoClear = true
     setSize(width: number, height: number, style?: boolean) {
       rendered.resize(width, height, style)
       if (rendered.sizable) Object.assign(this.domElement, { width, height })
@@ -35,6 +35,27 @@ vi.mock('three', async importOriginal => {
     dispose() {}
   }
   return { ...real, WebGLRenderer: Renderer }
+})
+const stills = vi.hoisted(() => ({ sizes: [] as { width: number; height: number }[], blank: false }))
+vi.mock('../lib/look', async importOriginal => {
+  const real = await importOriginal<typeof import('../lib/look')>()
+  const { Color } = await import('three')
+  // The real rig needs WebGL; this one draws through the mocked renderer and records still sizes.
+  class LookRig {
+    composer = {}
+    constructor(private renderer: { render: (...args: unknown[]) => void }, private scene: unknown, private camera: unknown) {}
+    apply(_look: unknown, background: string) { (this.scene as { background: unknown }).background = new Color(background) }
+    setSize() {}
+    setShadowDetail() {}
+    draw() { this.renderer.render(this.scene, this.camera) }
+    still(width: number, height: number) {
+      stills.sizes.push({ width, height })
+      this.draw()
+      return stills.blank ? 'data:,' : 'data:image/png;base64,AA=='
+    }
+    dispose() {}
+  }
+  return { ...real, LookRig }
 })
 const gizmos = vi.hoisted(() => ({ latest: null as null | { dispatchEvent: (event: { type: string; value?: boolean }) => void } }))
 vi.mock('three/addons/controls/TransformControls.js', async importOriginal => {
@@ -58,7 +79,7 @@ const api = { current: null as ViewportAPI | null }
 const onError = vi.fn()
 const runFrame = async () => { await act(async () => { const callbacks = [...jobs.values()]; jobs.clear(); callbacks.forEach(callback => callback(0)) }) }
 beforeEach(() => {
-  vi.clearAllMocks(); jobs = new Map(); sequence = 0; rendered.sizable = true
+  vi.clearAllMocks(); jobs = new Map(); sequence = 0; rendered.sizable = true; stills.sizes = []; stills.blank = false
   decoded.pixels.mockResolvedValue(new Uint8ClampedArray([21, 21, 21, 255]))
   delete document.documentElement.dataset.platformTheme
   delete document.documentElement.dataset.platformAppearance
@@ -188,7 +209,7 @@ it('draws a fresh frame at the on-screen size before capturing', async () => {
   await mount()
   rendered.draw.mockClear()
   await act(async () => { expect(await api.current!.capture()).toBe('data:image/png;base64,AA==') })
-  expect(rendered.resize).toHaveBeenCalledWith(640, 480, false)
+  expect(stills.sizes).toEqual([{ width: 640, height: 480 }])
   expect(rendered.draw).toHaveBeenCalledTimes(1)
 })
 it('renders a hidden viewport at its last known size, or a fixed size if it was never shown', async () => {
@@ -196,7 +217,7 @@ it('renders a hidden viewport at its last known size, or a fixed size if it was 
   const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(0)
   await mount()
   await act(async () => { await api.current!.capture() })
-  expect(rendered.resize).toHaveBeenLastCalledWith(1280, 720, false)
+  expect(stills.sizes.at(-1)).toEqual({ width: 1280, height: 720 })
   expect(rendered.draw).toHaveBeenCalledTimes(1)
   width.mockReturnValue(800); height.mockReturnValue(450)
   await runFrame()
@@ -204,16 +225,16 @@ it('renders a hidden viewport at its last known size, or a fixed size if it was 
   await runFrame()
   width.mockReturnValue(0); height.mockReturnValue(0)
   await act(async () => { await api.current!.capture() })
-  expect(rendered.resize).toHaveBeenLastCalledWith(800, 450, false)
+  expect(stills.sizes.at(-1)).toEqual({ width: 800, height: 450 })
 })
 it('refuses a blank capture instead of returning a transparent or unsized image', async () => {
-  // A canvas that cannot be sized keeps the HTML default 300x150.
-  rendered.sizable = false
+  // A still that comes back with no image.
+  stills.blank = true
   await mount()
   await expect(api.current!.capture()).rejects.toThrow("The viewport isn't drawn (Pure3D is not on screen)")
   expect(decoded.pixels).not.toHaveBeenCalled()
-  // A sized canvas whose pixels read back fully transparent.
-  rendered.sizable = true
+  // A still whose pixels read back fully transparent.
+  stills.blank = false
   decoded.pixels.mockResolvedValue(new Uint8ClampedArray(16))
   await expect(api.current!.capture()).rejects.toThrow('capture again once it is, or use getScene')
   decoded.pixels.mockResolvedValue(new Uint8ClampedArray([21, 21, 21, 255]))

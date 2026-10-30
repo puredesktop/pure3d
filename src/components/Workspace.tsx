@@ -48,7 +48,14 @@ import {
   MousePointer2,
   RefreshCw,
   Waypoints,
+  Mountain,
+  Trees,
+  TreeDeciduous,
+  Gem,
+  Waves,
+  Squircle,
 } from 'lucide-react'
+import { GENERATORS } from '../lib/generatorSpecs.mjs'
 import { Choice } from './Controls'
 import { Inspector } from './Inspector'
 import { Timeline } from './Timeline'
@@ -87,7 +94,14 @@ const SHAPES = [
   'torus',
   'plane',
   'group',
+  'roundedBox',
+  'terrain',
+  'scatter',
+  'tree',
+  'rock',
+  'water',
 ] as const
+const shapeLabel = (kind: string) => GENERATORS[kind]?.label ?? kind[0].toUpperCase() + kind.slice(1)
 const SCENE_SUFFIXES = ['.pure3d']
 const WORKSPACE_STATE = [
   'scene',
@@ -108,6 +122,12 @@ const icons = {
   plane: Square,
   group: Folder,
   mesh: Triangle,
+  terrain: Mountain,
+  scatter: Trees,
+  tree: TreeDeciduous,
+  rock: Gem,
+  water: Waves,
+  roundedBox: Squircle,
 }
 const basename = (title: string) =>
   title
@@ -374,7 +394,7 @@ export function Workspace({
           label="Add object"
           options={SHAPES.map(value => ({
             value,
-            label: value[0].toUpperCase() + value.slice(1),
+            label: shapeLabel(value),
           }))}
           onChange={kind => add(kind as SceneObject['kind'])}
         />

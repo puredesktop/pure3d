@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { GENERATOR_KINDS, generatorParamProblem, generatorGuide } from './generatorSpecs.mjs'
 
 export const vectorSchema = z.tuple([
   z.number().finite(),
@@ -14,7 +15,10 @@ export const shapeSchema = z.enum([
   'plane',
   'group',
   'mesh',
+  ...GENERATOR_KINDS,
 ])
+const hexSchema = z.string().regex(/^#[\da-f]{6}$/i)
+export const paramsSchema = z.record(z.string(), z.union([z.number().finite(), z.string().max(200)]))
 export const transformSchema = z
   .object({
     position: vectorSchema,
@@ -71,6 +75,11 @@ export const materialSchema = z
     opacity: z.number().min(0).max(1).optional(),
     wireframe: z.boolean().optional(),
     texture: textureBindingSchema.nullable().optional(),
+    emissive: hexSchema.optional(),
+    emissiveIntensity: z.number().min(0).max(100).optional(),
+    clearcoat: z.number().min(0).max(1).optional(),
+    transmission: z.number().min(0).max(1).optional(),
+    sheen: z.number().min(0).max(1).optional(),
   })
   .strict()
 export const geometrySchema = z
@@ -111,12 +120,20 @@ export const objectSchema = z
     transform: transformSchema,
     material: materialSchema,
     geometry: geometrySchema.nullable(),
+    params: paramsSchema.optional(),
   })
   .strict()
   .refine(
     o => (o.kind === 'mesh') === (o.geometry !== null),
     'Only mesh objects require geometry',
   )
+  .superRefine((o, ctx) => {
+    if (!o.params) return
+    const problem = GENERATOR_KINDS.includes(/** @type {any} */ (o.kind))
+      ? generatorParamProblem(o.kind, o.params)
+      : `${o.kind} objects take no params; only ${GENERATOR_KINDS.join(', ')} do`
+    if (problem) ctx.addIssue({ code: 'custom', message: problem })
+  })
 export const propertySchema = z.enum(['position', 'rotation', 'scale'])
 export const keyframeSchema = z
   .object({
@@ -133,6 +150,30 @@ export const cameraKeySchema = z.object({
   fov: z.number().finite().min(10).max(120),
   easing: z.enum(['linear', 'smooth', 'step']),
 }).strict().refine(k => k.position.some((n, i) => n !== k.target[i]), 'Camera position and target must differ')
+/**
+ * How the scene is lit and finished: sky or studio light, a sun with shadows, fog, and the camera's finishing passes
+ * (ambient occlusion, bloom, depth of field). Every field is optional; resolveLook fills the defaults.
+ */
+export const lookSchema = z
+  .object({
+    environment: z.enum(['sky', 'studio']).optional(),
+    sunElevation: z.number().min(-12).max(90).optional(),
+    sunAzimuth: z.number().min(0).max(360).optional(),
+    sunIntensity: z.number().min(0).max(20).optional(),
+    sunColor: hexSchema.optional(),
+    environmentIntensity: z.number().min(0).max(5).optional(),
+    haze: z.number().min(0).max(1).optional(),
+    clouds: z.number().min(0).max(1).optional(),
+    shadows: z.enum(['off', 'sharp', 'soft']).optional(),
+    fog: z.number().min(0).max(1).optional(),
+    fogColor: hexSchema.optional(),
+    exposure: z.number().min(0.05).max(5).optional(),
+    ambientOcclusion: z.number().min(0).max(2).optional(),
+    bloom: z.number().min(0).max(3).optional(),
+    focusDistance: z.number().min(0).max(5000).optional(),
+    aperture: z.number().min(0).max(1).optional(),
+  })
+  .strict()
 export const settingsSchema = z
   .object({
     duration: z.number().min(0.1).max(3600),
@@ -140,6 +181,7 @@ export const settingsSchema = z
     background: z.string().regex(/^#[\da-f]{6}$/i),
     grid: z.boolean(),
     camera: z.object({ position: vectorSchema, target: vectorSchema, fov: z.number().min(10).max(120).optional() }).strict(),
+    look: lookSchema.optional(),
   })
   .strict()
 export const sceneSchema = z
@@ -232,6 +274,7 @@ export const operationSchema = z.discriminatedUnion('op', [
               texture: textureBindingSchema.partial().nullable().optional(),
             })
             .optional(),
+          params: paramsSchema.optional(),
         })
         .strict(),
     })
@@ -291,12 +334,12 @@ const tool = (description, schema, risk = 'write', extra = {}) => ({
 })
 export const toolDefinitions = {
   getScene: tool(
-    'Read the active scene, file path, selection and playback. This is the only tool that returns scene detail: change tools reply with a short summary (ids, counts, path), so read here only what the next step needs. With no arguments it returns the complete scene. Narrow it with ids (includeDescendants:true adds each subtree), kinds, name (case-insensitive substring) and within (axis-aligned box tested against each object\'s world-space origin from its saved transforms, ignoring animation); filters combine with AND, keyframes are limited to the returned objects, and match reports counts and unknown ids. geometry:false replaces mesh arrays with vertex/triangle counts. summary:true returns counts by kind, settings, texture asset ids and an outline of id/name/kind/parentId per object instead of full objects (default limit 200; limit caps the returned objects in either mode and objectsMore reports the rest). Prefer summary:true or filters on large scenes. Embedded texture dataUrl bytes are always omitted. Rotations are XYZ Euler radians, time is seconds, positions use meters. Objects are box/sphere/cylinder/cone/torus/plane/group/mesh; primitives have unit size.',
+    'Read the active scene, file path, selection and playback. This is the only tool that returns scene detail: change tools reply with a short summary (ids, counts, path), so read here only what the next step needs. With no arguments it returns the complete scene. Narrow it with ids (includeDescendants:true adds each subtree), kinds, name (case-insensitive substring) and within (axis-aligned box tested against each object\'s world-space origin from its saved transforms, ignoring animation); filters combine with AND, keyframes are limited to the returned objects, and match reports counts and unknown ids. geometry:false replaces mesh arrays with vertex/triangle counts. summary:true returns counts by kind, settings, texture asset ids and an outline of id/name/kind/parentId per object instead of full objects (default limit 200; limit caps the returned objects in either mode and objectsMore reports the rest). Prefer summary:true or filters on large scenes. Embedded texture dataUrl bytes are always omitted. Rotations are XYZ Euler radians, time is seconds, positions use meters. Objects are box/sphere/cylinder/cone/torus/plane/group/mesh (primitives have unit size) or generated shapes (terrain/scatter/tree/rock/water/roundedBox) that carry params instead of triangles. settings.look holds the scene\'s light and finish.',
     z
       .object({
         ids: z.array(z.string().min(1)).min(1).max(1000).optional(),
         includeDescendants: z.boolean().optional(),
-        kinds: z.array(shapeSchema).min(1).max(8).optional(),
+        kinds: z.array(shapeSchema).min(1).max(20).optional(),
         name: z.string().min(1).max(200).optional(),
         within: z.object({ min: vectorSchema, max: vectorSchema }).strict().optional(),
         summary: z.boolean().optional(),
@@ -307,7 +350,7 @@ export const toolDefinitions = {
     'read',
   ),
   editScene: tool(
-    'Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings. Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.',
+    'Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings; settings.look merges with the current look. GENERATED SHAPES make natural, detailed scenes from a few numbers; prefer them to stacking primitives. Add one with kind, params (any omitted take their defaults) and geometry:null, material {} (vertex colours carry the colour; material.color tints). update with patch.params changes only the named params. ' + generatorGuide() + '. A scatter with on:<terrain id> sits on that terrain\'s surface; give terrain a clearing and the scatter an avoid radius for an open glade. LOOK (settings.look, all optional): environment sky|studio (sky = physical sky with clouds; studio = soft studio light on settings.background); sunElevation degrees (-12..90; 5-15 golden hour, below 0 dusk), sunAzimuth degrees (0 = +Z, 90 = +X; light from the side of the camera, not behind it), sunIntensity (3), sunColor (#rrggbb, default follows elevation), environmentIntensity (1), haze 0-1, clouds 0-1, shadows soft|sharp|off, fog 0-1 (sized to the scene), fogColor, exposure (1), ambientOcclusion 0-2 (1, contact shadows), bloom 0-3 (glow on bright and emissive things), focusDistance metres (0 = all sharp) with aperture 0-1 for background blur. MATERIALS also take emissive (#rrggbb) with emissiveIntensity for lamps and glows, clearcoat 0-1 (car paint, lacquer), transmission 0-1 (glass, water), sheen 0-1 (fabric). Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.',
     z
       .object({
         operations: z.array(operationSchema).min(1).max(200),
@@ -390,7 +433,7 @@ export const toolDefinitions = {
       .strict(),
   ),
   exportModel: tool(
-    'Export GLB with baked transform animation, OBJ/STL geometry of the current pose, or the actual viewport PNG, to an explicit workspace path. Extension must match format. Geometry exports exclude hidden objects, helpers and gizmos. PNG includes visible viewport controls.',
+    'Export GLB with baked transform animation, OBJ/STL geometry of the current pose, or a finished PNG render (as captureViewport, without gizmos), to an explicit workspace path. Extension must match format. Geometry exports exclude hidden objects, helpers and gizmos; OBJ and STL export a scatter\'s item once, GLB keeps its instances.',
     z
       .object({
         path: z.string().min(1),
@@ -403,7 +446,7 @@ export const toolDefinitions = {
     z.object({ direction: z.enum(['undo', 'redo']) }).strict(),
   ),
   captureViewport: tool(
-    'Read an actual rendered viewport PNG of the active scene at the current playhead. Draws a fresh frame first, at the on-screen size or, while Pure3D is hidden, at its last known size (1280x720 if never shown). Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the viewport cannot be drawn (unsized canvas or fully transparent pixels); capture again once Pure3D is on screen, or use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data.',
+    'Read a finished render of the active scene as a PNG at the current playhead: the scene\'s look (sky, sun shadows, fog, contact shadows, glow, focus), rendered off screen at twice the size and scaled down, without gizmos or the selection box. Uses the on-screen size or, while Pure3D is hidden, its last known size (1280x720 if never shown), so it works while hidden. Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the render comes back empty; then use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data.',
     z.object({}).strict(),
     'read',
     { requiresCapabilities: ['vision'] },

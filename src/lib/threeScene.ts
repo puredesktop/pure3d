@@ -1,6 +1,7 @@
 import * as THREE from 'three'
-import { pose, resolveMaterial, sampleProperty } from './scene'
+import { isGenerated, pose, resolveMaterial, sampleProperty, type ResolvedMaterial } from './scene'
 import { createGeometry } from './geometry'
+import { dressGenerated, generatedNode, scatterDependency } from './generators'
 import { loadTexture, TextureAssetCache } from './textures'
 import type { SceneDocument, SceneObject, Vec3 } from '../types'
 
@@ -18,13 +19,42 @@ type ReconciledScene = BuiltScene & {
 function disposeNode(node: THREE.Object3D) {
   if (!(node instanceof THREE.Mesh)) return
   node.geometry.dispose()
+  if (node instanceof THREE.InstancedMesh) node.dispose()
   const materials = Array.isArray(node.material) ? node.material : [node.material]
   for (const material of materials) {
     // Texture wrappers are per material. Their decoded source belongs to the cache.
     for (const value of Object.values(material))
-      if (value instanceof THREE.Texture) value.dispose()
+      if (value instanceof THREE.Texture && !value.userData.shared) value.dispose()
     material.dispose()
   }
+}
+
+/** A standard material, or a physical one when the object asks for clearcoat, transmission or sheen. */
+export function makeMaterial(properties: Omit<ResolvedMaterial, 'texture'>): THREE.MeshStandardMaterial {
+  const { clearcoat, transmission, sheen, emissive, emissiveIntensity, ...standard } = properties
+  const shared = {
+    ...standard,
+    ...(emissive ? { emissive: new THREE.Color(emissive), emissiveIntensity: emissiveIntensity ?? 1 } : {}),
+    transparent: standard.opacity < 1,
+    side: THREE.DoubleSide,
+  }
+  if (clearcoat || transmission || sheen)
+    return new THREE.MeshPhysicalMaterial({
+      ...shared,
+      clearcoat: clearcoat ?? 0,
+      clearcoatRoughness: 0.08,
+      transmission: transmission ?? 0,
+      thickness: transmission ? 0.5 : 0,
+      sheen: sheen ?? 0,
+      sheenRoughness: 0.6,
+    })
+  return new THREE.MeshStandardMaterial(shared)
+}
+
+/** Every visible surface takes shadows; solid things cast them (ground and water only receive). */
+function lightNode(node: THREE.Object3D, kind: string) {
+  node.castShadow = kind !== 'terrain' && kind !== 'water' && kind !== 'group'
+  node.receiveShadow = kind !== 'group'
 }
 
 /** Incrementally projects immutable scene snapshots into a stable Three.js tree. */
@@ -71,17 +101,28 @@ export function createSceneReconciler(
     const usedAssets = new Map<string, SceneDocument['textureAssets'][number]>()
     const assets = new Map(document.textureAssets.map(asset => [asset.id, asset]))
     for (const object of document.objects) {
-      const geometrySignature = JSON.stringify({ kind: object.kind, geometry: object.geometry })
+      const generated = isGenerated(object.kind)
+      const geometrySignature = JSON.stringify({
+        kind: object.kind,
+        geometry: object.geometry,
+        ...(generated ? { params: object.params ?? {}, on: object.kind === 'scatter' ? scatterDependency(document, object) : '' } : {}),
+      })
       let node = objects.get(object.id)
       const needsGroup = object.kind === 'group'
-      if (!node || (needsGroup ? !(node instanceof THREE.Group) || node instanceof THREE.Mesh : !(node instanceof THREE.Mesh))) {
+      // A generated shape is rebuilt whole when its parameters change (a scatter's instance count can change).
+      const stale = !!node && generated && objectSignatures.get(object.id) !== geometrySignature
+      const wrongKind = !!node && (node instanceof THREE.InstancedMesh) !== (object.kind === 'scatter')
+      if (!node || stale || wrongKind || (needsGroup ? !(node instanceof THREE.Group) || node instanceof THREE.Mesh : !(node instanceof THREE.Mesh))) {
         if (node) {
           node.removeFromParent()
           disposeNode(node)
         }
         node = needsGroup
           ? new THREE.Group()
-          : new THREE.Mesh(createGeometry(object), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }))
+          : generated
+            ? generatedNode(object, document)
+            : new THREE.Mesh(createGeometry(object), new THREE.MeshStandardMaterial({ side: THREE.DoubleSide }))
+        lightNode(node, object.kind)
         objects.set(object.id, node)
         objectSignatures.set(object.id, geometrySignature)
         materialSignatures.delete(object.id)
@@ -105,13 +146,14 @@ export function createSceneReconciler(
           textureLoads.delete(object.id)
           disposeNodeMaterial(node.material)
           const { texture, ...properties } = resolved
-          const material = new THREE.MeshStandardMaterial({ ...properties, transparent: properties.opacity < 1, side: THREE.DoubleSide })
+          const material = makeMaterial(properties)
           if (texture) {
             if (!asset) throw new Error(`Unknown texture asset: ${texture.assetId}`)
             const loaded = cache.texture(asset, texture)
             material.map = loaded.texture
             textureLoads.set(object.id, loaded.ready)
           }
+          if (generated) dressGenerated(node, material, !!texture)
           node.material = material
           materialSignatures.set(object.id, signature)
           objectImages.set(object.id, asset?.dataUrl)
@@ -134,7 +176,7 @@ export function createSceneReconciler(
 function disposeNodeMaterial(material: THREE.Material | THREE.Material[]) {
   for (const item of Array.isArray(material) ? material : [material]) {
     for (const value of Object.values(item))
-      if (value instanceof THREE.Texture) value.dispose()
+      if (value instanceof THREE.Texture && !value.userData.shared) value.dispose()
     item.dispose()
   }
 }
@@ -145,11 +187,7 @@ export function buildScene(document: SceneDocument, time = 0): BuiltScene {
   const pending: Promise<void>[] = []
   for (const object of document.objects) {
     const { texture, ...properties } = resolveMaterial(document, object)
-    const material = new THREE.MeshStandardMaterial({
-      ...properties,
-      transparent: properties.opacity < 1,
-      side: THREE.DoubleSide,
-    })
+    const material = makeMaterial(properties)
     if (texture && object.kind !== 'group') {
       const asset = document.textureAssets.find(item => item.id === texture.assetId)
       if (!asset) throw new Error(`Unknown texture asset: ${texture.assetId}`)
@@ -157,11 +195,18 @@ export function buildScene(document: SceneDocument, time = 0): BuiltScene {
       material.map = loaded.texture
       pending.push(loaded.ready)
     }
-    const node =
-      object.kind === 'group'
-        ? new THREE.Group()
-        : new THREE.Mesh(createGeometry(object), material)
-    if (object.kind === 'group') material.dispose()
+    let node: THREE.Object3D
+    if (object.kind === 'group') {
+      node = new THREE.Group()
+      material.dispose()
+    } else if (isGenerated(object.kind)) {
+      const mesh = generatedNode(object, document)
+      ;(mesh.material as THREE.Material).dispose()
+      mesh.material = material
+      dressGenerated(mesh, material, !!texture)
+      node = mesh
+    } else node = new THREE.Mesh(createGeometry(object), material)
+    lightNode(node, object.kind)
     node.name = object.id
     node.userData = { pure3dId: object.id, label: object.name }
     node.visible = object.visible
@@ -201,7 +246,7 @@ export function disposeScene(root: THREE.Object3D) {
         : [node.material]
       for (const material of materials) {
         for (const value of Object.values(material))
-          if (value instanceof THREE.Texture) {
+          if (value instanceof THREE.Texture && !value.userData.shared) {
             value.dispose()
             if (
               typeof ImageBitmap !== 'undefined' &&
