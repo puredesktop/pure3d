@@ -19,7 +19,16 @@ or over a terrain with `on: <terrain id>`, leaving an `avoid` radius empty),
 only the params it names. The `editScene` description lists every param. A terrain's centre
 is at y = 0, so things in its clearing stand at y = 0. If a scatter blocks the
 camera, raise its `avoid` radius, shrink its area or put the camera in the
-clearing, rather than hiding the scatter.
+clearing, rather than hiding the scatter. Scatters keep out of water on their
+own, and water mirrors what stands around it.
+
+Surfaces give any material real-world detail without UVs: `material.surface`
+is one of `wood`, `planks`, `stone`, `concrete`, `plaster`, `brick`, `tiles`,
+`metal`, `fabric`, `leather`, `marble`, `bark`, `ground` or `sand`, laid over
+`material.color` at its natural size (`surfaceScale` in metres per repeat,
+`surfaceStrength` 0-2). Terrain gets `ground`, rocks `stone` and trees `bark`
+unless a scene says otherwise (`surface: "none"` for smooth). Give floors,
+walls, furniture and props a surface; smooth plain colour reads as a toy.
 
 Light and finish live in `settings.look`, merged on each `settings` edit:
 `environment` `sky` (physical sky with clouds and a sun) or `studio` (soft
@@ -28,8 +37,10 @@ degrees (5-15 is golden hour; put the sun to the side of the camera, not
 behind it, so shadows show); `sunIntensity`, `haze`, `clouds`, `shadows`
 (`soft`, `sharp`, `off`), `fog` 0-1 (sized to the scene, coloured like the
 horizon), `exposure`, `ambientOcclusion` (contact shadows), `bloom` (glow on
-bright and emissive surfaces), and `focusDistance` with `aperture` for a
-blurred background. Materials also take `emissive` with `emissiveIntensity`,
+bright and emissive surfaces), `focusDistance` with `aperture` for a
+blurred background, `lightShafts` 0-1 (sunbeams between trunks when the sun is
+ahead of the camera), and a grade: `saturation`, `contrast`, `warmth` and
+`vignette`. Materials also take `emissive` with `emissiveIntensity`,
 `clearcoat`, `transmission` and `sheen`. Turn the grid off for finished
 shots, frame with a camera shot, then look with `captureViewport`.
 

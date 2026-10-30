@@ -3,6 +3,9 @@ import { isGenerated, pose, resolveMaterial, sampleProperty, type ResolvedMateri
 import { createGeometry } from './geometry'
 import { dressGenerated, generatedNode, scatterDependency } from './generators'
 import { loadTexture, TextureAssetCache } from './textures'
+import { applySurface } from './surfaces'
+import { disposeWater } from './water'
+import { SURFACES } from './surfaceSpecs.mjs'
 import type { SceneDocument, SceneObject, Vec3 } from '../types'
 
 export interface BuiltScene {
@@ -18,6 +21,7 @@ type ReconciledScene = BuiltScene & {
 
 function disposeNode(node: THREE.Object3D) {
   if (!(node instanceof THREE.Mesh)) return
+  disposeWater(node)
   node.geometry.dispose()
   if (node instanceof THREE.InstancedMesh) node.dispose()
   const materials = Array.isArray(node.material) ? node.material : [node.material]
@@ -29,9 +33,19 @@ function disposeNode(node: THREE.Object3D) {
   }
 }
 
-/** A standard material, or a physical one when the object asks for clearcoat, transmission or sheen. */
-export function makeMaterial(properties: Omit<ResolvedMaterial, 'texture'>): THREE.MeshStandardMaterial {
-  const { clearcoat, transmission, sheen, emissive, emissiveIntensity, ...standard } = properties
+/**
+ * A standard material, or a physical one when the object asks for clearcoat, transmission or sheen, with its surface
+ * laid over it. geometry: the shape it goes on (a surfaceMask attribute limits the surface to part of it).
+ */
+export function makeMaterial(properties: Omit<ResolvedMaterial, 'texture'>, geometry?: THREE.BufferGeometry): THREE.MeshStandardMaterial {
+  const material = baseMaterial(properties)
+  const { surface, surfaceScale, surfaceStrength } = properties
+  if (surface && surface !== 'none' && !properties.wireframe)
+    applySurface(material, { surface, scale: surfaceScale ?? SURFACES[surface].scale, strength: surfaceStrength ?? 1 }, !!geometry?.hasAttribute('surfaceMask'))
+  return material
+}
+function baseMaterial(properties: Omit<ResolvedMaterial, 'texture'>): THREE.MeshStandardMaterial {
+  const { clearcoat, transmission, sheen, emissive, emissiveIntensity, surface: _surface, surfaceScale: _scale, surfaceStrength: _strength, ...standard } = properties
   const shared = {
     ...standard,
     ...(emissive ? { emissive: new THREE.Color(emissive), emissiveIntensity: emissiveIntensity ?? 1 } : {}),
@@ -146,7 +160,7 @@ export function createSceneReconciler(
           textureLoads.delete(object.id)
           disposeNodeMaterial(node.material)
           const { texture, ...properties } = resolved
-          const material = makeMaterial(properties)
+          const material = makeMaterial(properties, node.geometry)
           if (texture) {
             if (!asset) throw new Error(`Unknown texture asset: ${texture.assetId}`)
             const loaded = cache.texture(asset, texture)

@@ -45,9 +45,15 @@ export function LookInspector({ scene, edit }: { scene: SceneDocument; edit: (op
       {number('fog', 'Fog', 0, 1, 0.05)}
       {number('ambientOcclusion', 'Contact shadows', 0, 2, 0.05)}
       {number('bloom', 'Glow', 0, 3, 0.05)}
+      {look.environment === 'sky' && number('lightShafts', 'Sunbeams', 0, 1, 0.05)}
       {number('exposure', 'Exposure', 0.05, 5, 0.05)}
       {number('focusDistance', 'Focus distance (0 = all sharp)', 0, 5000, 0.5, 'm')}
       {look.focusDistance > 0 && number('aperture', 'Background blur', 0, 1, 0.05)}
+      <SidebarSectionLabel>Grade</SidebarSectionLabel>
+      {number('saturation', 'Saturation', 0, 2, 0.05)}
+      {number('contrast', 'Contrast', 0.5, 1.5, 0.05)}
+      {number('warmth', 'Warmth', -1, 1, 0.05)}
+      {number('vignette', 'Vignette', 0, 1, 0.05)}
     </>
   )
 }
