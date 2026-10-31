@@ -2,6 +2,7 @@ import { z } from 'zod/v4'
 import { GENERATOR_KINDS, generatorParamProblem, generatorGuide } from './generatorSpecs.mjs'
 import { SURFACE_KINDS, surfaceGuide } from './surfaceSpecs.mjs'
 import { kitGuide } from './kit.mjs'
+import { MATERIAL_PRESET_NAMES, presetGuide } from './materialPresets.mjs'
 
 export const vectorSchema = z.tuple([
   z.number().finite(),
@@ -85,6 +86,7 @@ export const materialSchema = z
     surface: z.enum([...SURFACE_KINDS, 'none']).optional(),
     surfaceScale: z.number().min(0.005).max(1000).optional(),
     surfaceStrength: z.number().min(0).max(2).optional(),
+    preset: z.enum([...MATERIAL_PRESET_NAMES, 'none']).optional(),
   })
   .strict()
 export const geometrySchema = z
@@ -161,7 +163,8 @@ export const cameraKeySchema = z.object({
  */
 export const lookSchema = z
   .object({
-    environment: z.enum(['sky', 'studio']).optional(),
+    environment: z.enum(['sky', 'studio', 'night']).optional(),
+    stars: z.number().min(0).max(1).optional(),
     sunElevation: z.number().min(-12).max(90).optional(),
     sunAzimuth: z.number().min(0).max(360).optional(),
     sunIntensity: z.number().min(0).max(20).optional(),
@@ -329,6 +332,26 @@ export const operationSchema = z.discriminatedUnion('op', [
     .strict(),
 ])
 /**
+ * A camera shot: either an explicit camera (position and target, in metres) or one framed on objects (or the whole
+ * scene) from a direction: azimuth in degrees round the subject (0 looks from +z towards -z, 90 from +x), elevation in
+ * degrees above it, and how much of the frame the subject fills (or an exact distance).
+ */
+export const shotSchema = z
+  .object({
+    position: vectorSchema.optional(),
+    target: vectorSchema.optional(),
+    objectIds: z.array(z.string().min(1)).min(1).max(200).optional(),
+    azimuth: z.number().finite().optional(),
+    elevation: z.number().min(-89).max(89).optional(),
+    distance: z.number().positive().max(100000).optional(),
+    fill: z.number().min(0.05).max(1.5).optional(),
+    fov: z.number().min(10).max(120).optional(),
+  })
+  .strict()
+  .refine(v => (v.position === undefined) === (v.target === undefined), 'Give both position and target, or neither')
+  .refine(v => !v.position || !v.target || v.position.some((n, i) => n !== v.target?.[i]), 'Camera position and target must differ')
+export const ASPECTS = /** @type {const} */ (['16:9', '3:2', '4:3', '1:1', '4:5', '2:3', '9:16', '21:9'])
+/**
  * @template {import('zod/v4').ZodType} T
  * @param {string} description
  * @param {T} schema
@@ -360,7 +383,7 @@ export const toolDefinitions = {
     'read',
   ),
   editScene: tool(
-    'Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings; settings.look merges with the current look. GENERATED SHAPES make natural, detailed scenes from a few numbers; prefer them to stacking primitives. Add one with kind, params (any omitted take their defaults) and geometry:null, material {} (vertex colours carry the colour; material.color tints). update with patch.params changes only the named params. ' + generatorGuide() + '. A scatter with on:<terrain id> sits on that terrain\'s surface; give terrain a clearing and the scatter an avoid radius for an open glade. A terrain\'s centre is at y 0, so objects in its clearing stand at y 0. If a scatter blocks the camera, raise its avoid radius, shrink its area or move the camera into the clearing, rather than hiding it. Scatters keep out of water by themselves, and water mirrors the scene around it (trees, banks, sky). MADE THINGS are generated too: building (siding, trim, framed windows, door, plinth, gable/hip/shed roof with shingles or metal, fascia, gutters, chimney, porch with railings and steps), boat, dock (jetty), fence, lantern, crate, barrel and bench, each finished in parts (planks, stone, glass, metal) so they hold up close; build houses, cabins, boathouses and their props from these rather than boxes. KIT MODELS are ready-made CC0 models placed by name: add kind model with params.name one of ' + kitGuide() + ' (sizes are width×depth×height at scale 1; they keep their own textures, so material settings do not apply). LOOK (settings.look, all optional): environment sky|studio (sky = physical sky with clouds; studio = soft studio light on settings.background); sunElevation degrees (-12..90; 5-15 golden hour, below 0 dusk), sunAzimuth degrees (0 = +Z, 90 = +X; light from the side of the camera, not behind it), sunIntensity (3), sunColor (#rrggbb, default follows elevation), environmentIntensity (1), haze 0-1, clouds 0-1, shadows soft|sharp|off, fog 0-1 (sized to the scene), fogColor, exposure (1), ambientOcclusion 0-2 (1, contact shadows), bloom 0-3 (glow on bright and emissive things), focusDistance metres (0 = all sharp) with aperture 0-1 for background blur, lightShafts 0-1 (sunbeams through trees and gaps when the sun is ahead of the camera; sky only), and a grade on the finished picture: saturation 0-2 (1), contrast 0.5-1.5 (1), warmth -1..1 (0), vignette 0-1 (0). MATERIALS also take emissive (#rrggbb) with emissiveIntensity for lamps and glows, clearcoat 0-1 (car paint, lacquer), transmission 0-1 (glass, water), sheen 0-1 (fabric), and surface: fine real-world detail laid over any shape without UVs, varying its colour, roughness and bumps around material.color: ' + surfaceGuide() + '; surfaceScale is metres per repeat (defaults above), surfaceStrength 0-2 (1), surface none for smooth. Terrain gets ground, rocks stone and trees bark unless set. Give walls, floors, furniture and props a surface; plain smooth colour reads as a toy. DETAIL PASS: after the first good wide render, capture close-ups of the main subject (camera a few metres away) and add what reads as real at that distance: trim, sills, gutters, a porch, steps, a chimney; props by doors and on decks (kit models, lanterns, crates, barrels, benches); weathering by colour variation; ground clutter (kit stones, branches, ferns, stumps) where things meet the ground. Repeat until the close-ups hold up, then return to the hero shots. Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.',
+    'Atomically apply operations to the active scene. cameraKeyframe upserts a camera shot with time, position, target (look-at), fov (10-120 degrees), easing (linear/smooth/step). removeCameraKeyframe removes a shot by time. Camera shots live in scene.cameraKeys, independently of object animation; do not move the scene as a camera workaround. setWorkspace cameraPreview:true previews the journey. add requires a full object; use unique IDs. update merges transform/material/texture fields; texture:null removes the image. clearMaterialOverride restores inherited material. Texture repeat/offset use UV units, rotation uses radians. delete/duplicate include subtree and keys. mesh replaces triangle geometry with optional UVs. moveVertex moves a vertex and coincident seams in local coordinates. subdivide splits triangles while preserving UVs. unwrap applies box-projected UVs. keyframe upserts an object/property/time key; easing describes the interval AFTER that key. settings edits scene settings; settings.look merges with the current look. GENERATED SHAPES make natural, detailed scenes from a few numbers; prefer them to stacking primitives. Add one with kind, params (any omitted take their defaults) and geometry:null, material {} (vertex colours carry the colour; material.color tints). update with patch.params changes only the named params. ' + generatorGuide() + '. A scatter with on:<terrain id> sits on that terrain\'s surface; give terrain a clearing and the scatter an avoid radius for an open glade. A terrain\'s centre is at y 0, so objects in its clearing stand at y 0. If a scatter blocks the camera, raise its avoid radius, shrink its area or move the camera into the clearing, rather than hiding it. Scatters keep out of water by themselves, and water mirrors the scene around it (trees, banks, sky). MADE THINGS are generated too: building (siding, trim, framed windows, door, plinth, gable/hip/shed roof with shingles or metal, fascia, gutters, chimney, porch with railings and steps), boat, dock (jetty), fence, lantern, crate, barrel and bench, each finished in parts (planks, stone, glass, metal) so they hold up close; build houses, cabins, boathouses and their props from these rather than boxes. LIGHTS are objects too: kind light (point = bulb/lamp/fire, spot = aimed cone, area = soft panel or softbox, no shadows) lights and shadows what is around it; place a point light just outside a lamp\'s glass or set shadows no when it sits inside a lamp, aim spots and areas with aim target and targetX/Y/Z, and give a lantern params.light to make it light its surroundings. Use lights for interiors, night scenes, window light and product shots, with emissive materials for the visible bulb or glow. backdrop is a seamless studio sweep for product and portrait shots: put the product on it and light it with two or three area lights (a large soft key at 45°, a weaker fill on the other side, a rim behind) under environment studio. KIT MODELS are ready-made CC0 models placed by name: add kind model with params.name one of ' + kitGuide() + ' (sizes are width×depth×height at scale 1; they keep their own textures, so material settings do not apply). LOOK (settings.look, all optional): environment sky|studio|night (sky = physical sky with clouds; studio = soft studio light on settings.background; night = dark sky with stars and the moon, whose cool moonlight takes the sun\'s place: sunElevation/sunAzimuth place the moon, sunIntensity sets moonlight, stars 0-1 (0.6); light night scenes with lights, lit windows and lanterns, and raise exposure to 1.3-2 if it is too dark); sunElevation degrees (-12..90; 5-15 golden hour, below 0 dusk), sunAzimuth degrees (0 = +Z, 90 = +X; light from the side of the camera, not behind it), sunIntensity (3), sunColor (#rrggbb, default follows elevation), environmentIntensity (1), haze 0-1, clouds 0-1, shadows soft|sharp|off, fog 0-1 (sized to the scene), fogColor, exposure (1), ambientOcclusion 0-2 (1, contact shadows), bloom 0-3 (glow on bright and emissive things), focusDistance metres (0 = all sharp) with aperture 0-1 for background blur, lightShafts 0-1 (sunbeams through trees and gaps when the sun is ahead of the camera; sky only), and a grade on the finished picture: saturation 0-2 (1), contrast 0.5-1.5 (1), warmth -1..1 (0), vignette 0-1 (0). MATERIALS take preset, a real material by name: ' + presetGuide() + ' (it fills in colour, metalness, roughness, clearcoat, transmission, sheen and surface; values set beside it win, so preset gold with color #f0d090 is a paler gold). They also take emissive (#rrggbb) with emissiveIntensity for lamps and glows, clearcoat 0-1 (car paint, lacquer), transmission 0-1 (glass, water), sheen 0-1 (fabric), and surface: fine real-world detail laid over any shape without UVs, varying its colour, roughness and bumps around material.color: ' + surfaceGuide() + '; surfaceScale is metres per repeat (defaults above), surfaceStrength 0-2 (1), surface none for smooth. Terrain gets ground, rocks stone and trees bark unless set. Give walls, floors, furniture and props a surface; plain smooth colour reads as a toy. DETAIL PASS: after the first good wide render, capture close-ups of the main subject (camera a few metres away) and add what reads as real at that distance: trim, sills, gutters, a porch, steps, a chimney; props by doors and on decks (kit models, lanterns, crates, barrels, benches); weathering by colour variation; ground clutter (kit stones, branches, ferns, stumps) where things meet the ground. Repeat until the close-ups hold up, then return to the hero shots. Preserve unrelated objects, object keyframes and textures when editing camera shots. Replies with a summary, not the scene: ok, saved path, scene header (id, title, counts, duration), operations applied, and changes (added/updated/removed object ids, capped at 25 with addedMore/updatedMore/removedMore counts; keyframe and camera-key counts; texture asset ids; changed settings keys). Use getScene with ids to read edited objects back.',
     z
       .object({
         operations: z.array(operationSchema).min(1).max(200),
@@ -368,7 +391,7 @@ export const toolDefinitions = {
       .strict(),
   ),
   setWorkspace: tool(
-    'Operate selection, transform mode, playback, playhead, looping, inspector visibility, cameraPreview or frame selection. cameraPreview:true uses the animated camera track at the playhead, with clean 16:9 framing; false restores the editing camera. Combine cameraPreview:true, time:0, playing:true to play a camera journey. Preview does not rewrite the saved shots or object animation. selectedVertex selects a mesh vertex and pauses playback; null returns to object mode. Changing objects, rotating/scaling or playing exits vertex mode. Framing saves the editing camera; selection, preview and scrubbing are transient. Replies with the resulting workspace state and the selected object id/name/kind; framing also returns the saved path and camera.',
+    'Operate selection, transform mode, playback, playhead, looping, inspector visibility, cameraPreview or frame selection. cameraPreview:true uses the animated camera track at the playhead, with clean 16:9 framing; false restores the editing camera. Combine cameraPreview:true, time:0, playing:true to play a camera journey. Preview does not rewrite the saved shots or object animation. selectedVertex selects a mesh vertex and pauses playback; null returns to object mode. Changing objects, rotating/scaling or playing exits vertex mode. Framing saves the editing camera; selection, preview and scrubbing are transient. Replies with the resulting workspace state and the selected object id/name/kind; framing also returns the saved path and camera. shot sets and saves the editing camera: {position, target, fov?} exactly, or framed on objectIds (default: everything) from azimuth (degrees round it, 0 = from +z, 90 = from +x; default 35) and elevation (degrees above; default 18) with the subject filling fill of the frame (default 0.85; 0.4 for a wide shot with room around it, 1.2 for a tight crop) or at an exact distance, fov 10-120 (35-50 natural, 20-30 telephoto for products and portraits, 70+ wide). Add shotAt (seconds) to upsert that shot as a camera keyframe instead. The reply has the resulting camera, and blockedBy lists objects standing between the camera and the subject (move closer, change the angle, or raise a scatter\'s avoid radius).',
     z
       .object({
         selectedId: z.string().nullable().optional(),
@@ -380,8 +403,11 @@ export const toolDefinitions = {
         inspector: z.boolean().optional(),
         cameraPreview: z.boolean().optional(),
         frameSelection: z.boolean().optional(),
+        shot: shotSchema.optional(),
+        shotAt: z.number().finite().min(0).max(3600).optional(),
       })
-      .strict(),
+      .strict()
+      .refine(v => v.shotAt === undefined || v.shot !== undefined, 'shotAt needs a shot'),
   ),
   newScene: tool(
     'Save the current scene before creating a starter 3D scene with editable primitive shapes. Optional title. Returns the saved path and scene header (id, title, counts).',
@@ -456,8 +482,14 @@ export const toolDefinitions = {
     z.object({ direction: z.enum(['undo', 'redo']) }).strict(),
   ),
   captureViewport: tool(
-    'Read a finished render of the active scene as a PNG at the current playhead: the scene\'s look (sky, sun shadows, fog, contact shadows, glow, focus), rendered off screen at twice the size and scaled down, without gizmos or the selection box. Uses the on-screen size or, while Pure3D is hidden, its last known size (1280x720 if never shown), so it works while hidden. Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the render comes back empty; then use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data.',
-    z.object({}).strict(),
+    'Read a finished render of the active scene as a PNG at the current playhead: the scene\'s look (sky, sun shadows, fog, contact shadows, glow, focus), rendered off screen at twice the size and scaled down, without gizmos or the selection box. Uses the on-screen size or, while Pure3D is hidden, its last known size (1280x720 if never shown), so it works while hidden. Refuses if the renderer is unavailable, and returns an error with no image rather than a blank one when the render comes back empty; then use getScene. Returns the image with a one-line note (title, playhead time); use getScene for scene data. Optional aspect (16:9, 3:2, 4:3, 1:1, 4:5, 2:3, 9:16, 21:9) and size (long edge in pixels, 256-2048) set the picture\'s shape and size. views (up to 4 shots, each as setWorkspace shot: {position, target, fov?} or {objectIds?, azimuth, elevation, fill?/distance?, fov?}) renders one image per view, for checking a subject from several sides in one call; the note gives each view\'s camera (with blockedBy when something stands in front of the subject) so a good one can be kept with setWorkspace shot. Views and capture options never change the saved camera.',
+    z
+      .object({
+        aspect: z.enum(ASPECTS).optional(),
+        size: z.number().int().min(256).max(2048).optional(),
+        views: z.array(shotSchema).min(1).max(4).optional(),
+      })
+      .strict(),
     'read',
     { requiresCapabilities: ['vision'] },
   ),

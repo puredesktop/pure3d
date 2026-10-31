@@ -7,6 +7,7 @@ import { leafAtlas, ATLAS } from './leafAtlas'
 import { dressWater } from './water'
 import { extendShader } from './shaderHooks'
 import { structureGeometry } from './structures'
+import { lanternLight } from './lights'
 import type { SceneDocument, SceneObject } from '../types'
 
 /**
@@ -597,7 +598,7 @@ export function generatedGeometry(object: SceneObject): THREE.BufferGeometry {
     case 'rock': return rock(num(params, 'size'), num(params, 'roughness'), num(params, 'flatness'), str(params, 'stone'), num(params, 'moss'), num(params, 'seed'))
     case 'water': return water(params)
     case 'roundedBox': return new RoundedBoxGeometry(1, 1, 1, Math.round(num(params, 'segments')), Math.min(num(params, 'radius'), 0.5))
-    case 'building': case 'boat': case 'dock': case 'fence': case 'lantern': case 'crate': case 'barrel': case 'bench':
+    case 'building': case 'boat': case 'dock': case 'fence': case 'lantern': case 'crate': case 'barrel': case 'bench': case 'backdrop':
       return structureGeometry(object.kind, params)
     default: throw new Error(`${object.kind} is not a generated shape`)
   }
@@ -612,7 +613,12 @@ export function generatedNode(object: SceneObject, document: SceneDocument | nul
     mesh.geometry.userData.leafAtlas = FOLIAGE.has(String(generatorParams('scatter', object.params).item))
     return mesh
   }
-  return new THREE.Mesh(generatedGeometry(object), new THREE.MeshStandardMaterial())
+  const mesh = new THREE.Mesh(generatedGeometry(object), new THREE.MeshStandardMaterial())
+  if (object.kind === 'lantern') {
+    const params = generatorParams('lantern', object.params)
+    if (Number(params.light) > 0) mesh.add(lanternLight(Number(params.height), Number(params.light)))
+  }
+  return mesh
 }
 
 /** Gives a generated object's material its vertex colours and, for foliage, the leaf atlas; water mirrors the scene. */

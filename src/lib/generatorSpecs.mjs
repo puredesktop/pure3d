@@ -3,11 +3,12 @@
  * seeded (the same parameters always make the same shape). Each spec lists its parameters with their ranges and
  * defaults; the schema checks them, the Inspector draws them, and the tool descriptions name them.
  *
- * @typedef {{ key: string, label: string, type: 'number', min: number, max: number, step?: number, default: number, unit?: string, hint?: string }} NumberParam
- * @typedef {{ key: string, label: string, type: 'color', default: string, hint?: string }} ColorParam
- * @typedef {{ key: string, label: string, type: 'select', options: string[], default: string, hint?: string }} SelectParam
- * @typedef {{ key: string, label: string, type: 'object', default: string, hint?: string }} ObjectParam
+ * @typedef {{ key: string, label: string, type: 'number', min: number, max: number, step?: number, default: number, unit?: string, hint?: string, show?: Record<string, string[]> }} NumberParam
+ * @typedef {{ key: string, label: string, type: 'color', default: string, hint?: string, show?: Record<string, string[]> }} ColorParam
+ * @typedef {{ key: string, label: string, type: 'select', options: string[], default: string, hint?: string, show?: Record<string, string[]> }} SelectParam
+ * @typedef {{ key: string, label: string, type: 'object', default: string, hint?: string, show?: Record<string, string[]> }} ObjectParam
  * @typedef {NumberParam | ColorParam | SelectParam | ObjectParam} GeneratorParam
+ * A param may name `show`: other params' values it applies to (the Inspector hides it otherwise), e.g. { type: ['spot'] }.
  * @typedef {{ label: string, description: string, params: GeneratorParam[] }} GeneratorSpec
  */
 
@@ -165,6 +166,37 @@ export const GENERATORS = {
       { key: 'height', label: 'Height', type: 'number', min: 0.1, max: 2, default: 0.35, unit: 'm' },
       { key: 'metal', label: 'Metal', type: 'color', default: '#3a3a38' },
       { key: 'glow', label: 'Glow', type: 'number', min: 0, max: 4, step: 0.1, default: 1.5 },
+      { key: 'light', label: 'Light', type: 'number', min: 0, max: 20, step: 0.1, default: 0, hint: 'Real warm light on what is around it (1 = an oil lamp)' },
+    ],
+  },
+  light: {
+    label: 'Light',
+    description: 'A real light that lights and shadows what is around it: a point (a bulb, lamp or fire, shining every way), a spot (a cone, aimed) or an area (a soft rectangular panel, like a softbox or a window; no shadows). Spots and areas shine down (local -y) unless aim is target, which points them at targetX/Y/Z in world metres. intensity 1 is a normal lamp a few metres away; 2-4 for a strong key light, 10 and more for floodlights; an area\'s light is spread over its size, so a bigger panel is softer, not brighter. Its marker is not drawn in renders.',
+    params: [
+      { key: 'type', label: 'Type', type: 'select', options: ['point', 'spot', 'area'], default: 'point' },
+      { key: 'color', label: 'Colour', type: 'color', default: '#ffd9a8' },
+      { key: 'intensity', label: 'Intensity', type: 'number', min: 0, max: 500, step: 0.1, default: 1 },
+      { key: 'range', label: 'Reach', type: 'number', min: 0, max: 1000, default: 0, unit: 'm', hint: '0 = natural falloff' },
+      { key: 'angle', label: 'Cone', show: { type: ['spot'] }, type: 'number', min: 1, max: 89, default: 35, unit: '°', hint: 'Spot: half-angle of the cone' },
+      { key: 'softness', label: 'Soft edge', show: { type: ['spot'] }, type: 'number', min: 0, max: 1, step: 0.05, default: 0.4, hint: 'Spot: how softly the cone fades' },
+      { key: 'width', label: 'Width', show: { type: ['area'] }, type: 'number', min: 0.01, max: 50, default: 1, unit: 'm', hint: 'Area' },
+      { key: 'height', label: 'Height', show: { type: ['area'] }, type: 'number', min: 0.01, max: 50, default: 1, unit: 'm', hint: 'Area' },
+      { key: 'shadows', label: 'Shadows', show: { type: ['point', 'spot'] }, type: 'select', options: ['yes', 'no'], default: 'yes', hint: 'Point and spot' },
+      { key: 'aim', label: 'Aim', show: { type: ['spot', 'area'] }, type: 'select', options: ['down', 'target'], default: 'down' },
+      { key: 'targetX', label: 'Target x', show: { aim: ['target'] }, type: 'number', min: -10000, max: 10000, default: 0, unit: 'm' },
+      { key: 'targetY', label: 'Target y', show: { aim: ['target'] }, type: 'number', min: -10000, max: 10000, default: 0, unit: 'm' },
+      { key: 'targetZ', label: 'Target z', show: { aim: ['target'] }, type: 'number', min: -10000, max: 10000, default: 0, unit: 'm' },
+    ],
+  },
+  backdrop: {
+    label: 'Studio backdrop',
+    description: 'A seamless studio sweep (cyclorama) for product and portrait shots: a floor that curves up into a back wall with no visible corner. Centred on x, the floor runs from z +depth/2 back to the wall at z -depth/2; stands on y 0. Pair with area lights and look.environment studio.',
+    params: [
+      { key: 'width', label: 'Width', type: 'number', min: 0.2, max: 200, default: 8, unit: 'm' },
+      { key: 'depth', label: 'Depth', type: 'number', min: 0.2, max: 200, default: 6, unit: 'm' },
+      { key: 'height', label: 'Height', type: 'number', min: 0.2, max: 100, default: 4, unit: 'm' },
+      { key: 'radius', label: 'Curve', type: 'number', min: 0.01, max: 50, default: 1.5, unit: 'm', hint: 'Radius of the sweep' },
+      { key: 'color', label: 'Colour', type: 'color', default: '#e9e7e3' },
     ],
   },
   crate: {
@@ -210,7 +242,7 @@ export const GENERATORS = {
   },
 }
 
-export const GENERATOR_KINDS = /** @type {const} */ (['terrain', 'scatter', 'tree', 'rock', 'water', 'roundedBox', 'building', 'boat', 'dock', 'fence', 'lantern', 'crate', 'barrel', 'bench', 'model'])
+export const GENERATOR_KINDS = /** @type {const} */ (['terrain', 'scatter', 'tree', 'rock', 'water', 'roundedBox', 'building', 'boat', 'dock', 'fence', 'lantern', 'crate', 'barrel', 'bench', 'model', 'light', 'backdrop'])
 
 /**
  * A generator's parameters with every default filled in. Unknown keys are dropped.

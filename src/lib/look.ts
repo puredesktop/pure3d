@@ -30,6 +30,83 @@ class FoliageAwareGTAOPass extends GTAOPass {
   }
 }
 
+/**
+ * A night sky: deep blue fading to black overhead, stars, and the moon (with a soft halo) where the sun would be. Drawn
+ * on a dome that follows the camera; it also lights the scene's reflections, so night scenes are dim but not black.
+ */
+export class NightSky extends THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> {
+  constructor() {
+    super(
+      new THREE.SphereGeometry(1, 48, 24),
+      new THREE.ShaderMaterial({
+        name: 'Pure3DNightSky',
+        side: THREE.BackSide,
+        depthWrite: false,
+        uniforms: { moonDirection: { value: new THREE.Vector3(0, 1, 0) }, moon: { value: 1 }, stars: { value: 0.6 }, haze: { value: 0.25 } },
+        vertexShader: `
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 world = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = world.xyz;
+            gl_Position = projectionMatrix * viewMatrix * world;
+            gl_Position.z = gl_Position.w;
+          }`,
+        fragmentShader: `
+          uniform vec3 moonDirection;
+          uniform float moon;
+          uniform float stars;
+          uniform float haze;
+          varying vec3 vWorldPosition;
+          float hash(vec3 p) {
+            p = fract(p * 0.3183099 + 0.1);
+            p *= 17.0;
+            return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+          }
+          void main() {
+            vec3 d = normalize(vWorldPosition - cameraPosition);
+            float h = d.y;
+            vec3 zenith = vec3(0.003, 0.006, 0.016);
+            vec3 horizon = mix(vec3(0.03, 0.045, 0.08), vec3(0.06, 0.065, 0.08), haze);
+            vec3 colour = h >= 0.0 ? mix(horizon, zenith, smoothstep(0.0, 0.55, h)) : mix(horizon, vec3(0.008, 0.01, 0.016), smoothstep(0.0, -0.25, h));
+            // stars: one in a few hundred cells of a fine grid over the sphere, of varied brightness, fading near the horizon
+            vec3 g = d * 360.0;
+            vec3 cell = floor(g);
+            if (h > 0.0 && hash(cell) > 1.0 - 0.02 * stars) {
+              vec3 centre = cell + 0.5 + 0.6 * (vec3(hash(cell + 1.3), hash(cell + 2.7), hash(cell + 4.1)) - 0.5);
+              float brightness = 0.35 + 3.0 * pow(hash(cell + 7.9), 8.0);
+              float twinkle = smoothstep(0.55, 0.0, length(g - centre));
+              vec3 tint = mix(vec3(1.0, 0.86, 0.72), vec3(0.78, 0.86, 1.0), hash(cell + 3.3));
+              colour += tint * twinkle * brightness * smoothstep(0.0, 0.2, h) * (1.0 - haze * 0.7);
+            }
+            // the moon: a bright disc with a little shading, a halo and a wide glow
+            float m = dot(d, moonDirection);
+            float disc = smoothstep(0.99986, 0.99990, m);
+            float shade = 0.85 + 0.15 * hash(floor(d * 2400.0));
+            colour += moon * (vec3(1.0, 0.98, 0.92) * 2.6 * disc * shade
+              + vec3(0.25, 0.3, 0.42) * pow(max(m, 0.0), 900.0) * 0.8
+              + vec3(0.04, 0.055, 0.09) * pow(max(m, 0.0), 14.0) * (0.4 + haze));
+            gl_FragColor = vec4(colour, 1.0);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+          }`,
+      }),
+    )
+    this.name = 'Pure3D night sky'
+    this.frustumCulled = false
+  }
+  set(direction: THREE.Vector3, stars: number, haze: number) {
+    const uniforms = this.material.uniforms
+    uniforms.moonDirection.value.copy(direction)
+    uniforms.moon.value = THREE.MathUtils.smoothstep(direction.y, -0.03, 0.02)
+    uniforms.stars.value = stars
+    uniforms.haze.value = haze
+  }
+  dispose() {
+    this.geometry.dispose()
+    this.material.dispose()
+  }
+}
+
 function disposeSkyScene(scene: THREE.Scene) {
   for (const child of scene.children) {
     const sky = child as Sky
@@ -69,6 +146,7 @@ export const DEFAULT_LOOK: Look = {
   contrast: 1,
   warmth: 0,
   vignette: 0,
+  stars: 0.6,
 }
 
 export function resolveLook(document: SceneDocument): Look {
@@ -90,6 +168,7 @@ export function sunlightColor(elevation: number): THREE.Color {
 
 /** The sky's colour at the horizon, for fog that blends into it. */
 export function horizonColor(look: Look, background: string): THREE.Color {
+  if (look.environment === 'night') return new THREE.Color('#1a2438').lerp(new THREE.Color('#2a2e38'), look.haze * 0.6)
   if (look.environment !== 'sky') return new THREE.Color(background)
   const t = THREE.MathUtils.smoothstep(look.sunElevation, -4, 30)
   return new THREE.Color('#e7a77c').lerp(new THREE.Color('#c3d3e2'), t).lerp(new THREE.Color('#d7d9dc'), look.haze * 0.5)
@@ -104,6 +183,7 @@ export class LookRig {
   private readonly sun = new THREE.DirectionalLight('#ffffff', 3)
   private readonly fill = new THREE.HemisphereLight('#ffffff', '#6b6153', 0.35)
   private readonly sky = new Sky()
+  private readonly night = new NightSky()
   private readonly pmrem: THREE.PMREMGenerator
   private environment: THREE.WebGLRenderTarget | null = null
   private environmentKey = ''
@@ -137,6 +217,8 @@ export class LookRig {
     this.sky.frustumCulled = false
     this.sky.material.uniforms.mieDirectionalG.value = 0.8
     scene.add(this.sky)
+    this.night.scale.setScalar(4000)
+    scene.add(this.night)
     const size = renderer.getDrawingBufferSize(new THREE.Vector2())
     const target = new THREE.WebGLRenderTarget(Math.max(1, size.x), Math.max(1, size.y), { type: THREE.HalfFloatType, samples: 4 })
     this.composer = new EffectComposer(renderer, target)
@@ -160,10 +242,11 @@ export class LookRig {
     this.radius = bounds.isEmpty() ? 6 : Math.max(2, bounds.getBoundingSphere(new THREE.Sphere()).radius)
     const direction = sunDirection(look.sunElevation, look.sunAzimuth)
     const sky = look.environment === 'sky'
-    // The sun
+    const night = look.environment === 'night'
+    // The sun, or at night the moon: cool, dim light that fades as the moon sets
     const daylight = THREE.MathUtils.smoothstep(look.sunElevation, -6, 8)
-    this.sun.color.set(look.sunColor ?? sunlightColor(look.sunElevation))
-    this.sun.intensity = look.sunIntensity * (sky ? daylight : 1)
+    this.sun.color.set(look.sunColor ?? (night ? '#9fb6e8' : sunlightColor(look.sunElevation)))
+    this.sun.intensity = look.sunIntensity * (night ? 0.12 * THREE.MathUtils.smoothstep(look.sunElevation, -2, 6) : sky ? daylight : 1)
     this.centre.copy(centre)
     this.direction.copy(direction)
     this.sun.castShadow = look.shadows !== 'off'
@@ -173,6 +256,8 @@ export class LookRig {
     this.sun.shadow.needsUpdate = true
     // The sky, or a plain studio background
     this.sky.visible = sky
+    this.night.visible = night
+    this.night.set(direction, look.stars, look.haze)
     const uniforms = this.sky.material.uniforms
     uniforms.sunPosition.value.copy(direction)
     uniforms.turbidity.value = 1.5 + look.haze * 9
@@ -180,15 +265,23 @@ export class LookRig {
     uniforms.mieCoefficient.value = 0.003 + look.haze * 0.012
     if (uniforms.cloudCoverage) uniforms.cloudCoverage.value = look.clouds
     if (uniforms.cloudDensity) uniforms.cloudDensity.value = 0.3 + look.clouds * 0.5
-    this.scene.background = sky ? null : new THREE.Color(background)
+    this.scene.background = sky || night ? null : new THREE.Color(background)
     // A soft fill that keeps shadows from going black (the environment does most of this)
     this.fill.color.copy(horizonColor(look, background)).lerp(new THREE.Color('#ffffff'), 0.5)
-    this.fill.intensity = 0.25 * look.environmentIntensity
+    this.fill.intensity = 0.25 * look.environmentIntensity * (night ? 0.25 : 1)
     // Reflections and ambient light from the sky or a studio
-    const key = sky ? JSON.stringify([look.sunElevation, look.sunAzimuth, look.haze, look.clouds]) : 'studio'
+    const key = sky ? JSON.stringify([look.sunElevation, look.sunAzimuth, look.haze, look.clouds]) : night ? JSON.stringify(['night', look.sunElevation, look.sunAzimuth, look.haze]) : 'studio'
     if (key !== this.environmentKey) {
       this.environment?.dispose()
-      if (sky) {
+      if (night) {
+        const nightScene = new THREE.Scene()
+        const copy = new NightSky()
+        copy.scale.setScalar(1000)
+        copy.set(direction, 0, look.haze)
+        nightScene.add(copy)
+        this.environment = this.pmrem.fromScene(nightScene, 0.02, 0.1, 2000)
+        copy.dispose()
+      } else if (sky) {
         const skyScene = this.skyScene()
         this.environment = this.pmrem.fromScene(skyScene, 0, 0.1, 2000)
         disposeSkyScene(skyScene)
@@ -196,7 +289,7 @@ export class LookRig {
       this.environmentKey = key
     }
     this.scene.environment = this.environment!.texture
-    this.scene.environmentIntensity = look.environmentIntensity * (sky ? 0.25 + daylight * 0.3 : 0.75)
+    this.scene.environmentIntensity = look.environmentIntensity * (night ? 1.5 : sky ? 0.25 + daylight * 0.3 : 0.75)
     // Fog sized to the scene and coloured like the horizon
     this.scene.fog = look.fog > 0 ? new THREE.FogExp2(new THREE.Color(look.fogColor ?? horizonColor(look, background)), (look.fog * look.fog * 3.2) / this.radius) : null
     this.renderer.toneMappingExposure = look.exposure
@@ -340,6 +433,7 @@ export class LookRig {
     this.grade.dispose()
     this.sky.geometry.dispose()
     this.sky.material.dispose()
+    this.night.dispose()
     this.sun.shadow.dispose()
     this.room.traverse(node => {
       if (node instanceof THREE.Mesh) { node.geometry.dispose(); (node.material as THREE.Material).dispose() }

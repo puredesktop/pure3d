@@ -43,8 +43,8 @@ describe('Generated objects', () => {
     expect(resolveMaterial(scene, scene.objects[0]!)).toMatchObject({ color: '#ffffff', metalness: 0 })
   })
   it('builds every generator with colours and UVs, leaf cards on foliage', () => {
-    // kit models are groups filled from a file, not generated geometry
-    for (const kind of GENERATOR_KINDS.filter(kind => kind !== 'model')) {
+    // kit models are groups filled from a file and lights are lights, not generated geometry
+    for (const kind of GENERATOR_KINDS.filter(kind => kind !== 'model' && kind !== 'light')) {
       const node = generatedNode(object(kind, kind === 'scatter' ? { count: 20 } : {}), null)
       expect(node.geometry.getAttribute('position').count).toBeGreaterThan(0)
       expect(node.geometry.getAttribute('uv')).toBeTruthy()

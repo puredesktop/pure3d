@@ -155,17 +155,44 @@ describe('Assistant surface', () => {
   })
   it('returns viewport images and frames using the viewport operation', async () => {
     const { store, viewport, document, invoke } = setup()
-    viewport.current = {
+    const shot = vi.fn((spec: { azimuth?: number }) => ({ position: [spec.azimuth ?? 1, 3, 6] as [number, number, number], target: [0, 1, 0] as [number, number, number], fov: 35 }))
+    const current = {
       capture: vi.fn().mockResolvedValue('data:image/png;base64,AQID'),
       frame: vi.fn(),
+      shot,
+      aspect: vi.fn(() => 16 / 9),
     }
+    viewport.current = current
     const capture = await invoke('captureViewport')
     expect(capture.images).toEqual([{ mimeType: 'image/png', data: 'AQID' }])
     await invoke('setWorkspace', {
       frameSelection: true,
     })
-    expect(viewport.current.frame).toHaveBeenCalledTimes(1)
+    expect(current.frame).toHaveBeenCalledTimes(1)
     expect(document.save).toHaveBeenCalledTimes(1)
+  })
+  it('renders one image per view at the asked shape without moving the saved camera', async () => {
+    const { store, viewport, invoke } = setup()
+    const shot = vi.fn((spec: { azimuth?: number }) => ({ position: [spec.azimuth ?? 1, 3, 6] as [number, number, number], target: [0, 1, 0] as [number, number, number], fov: 35 }))
+    const current = { capture: vi.fn().mockResolvedValue('data:image/png;base64,AQID'), frame: vi.fn(), shot, aspect: vi.fn(() => 16 / 9) }
+    viewport.current = current
+    const before = store.getCameraSnapshot()
+    const capture = await invoke('captureViewport', { aspect: '1:1', size: 1024, views: [{ azimuth: 0 }, { azimuth: 90 }, { azimuth: 180 }] })
+    expect(capture.images).toHaveLength(3)
+    expect(shot).toHaveBeenCalledWith({ azimuth: 90 }, 1)
+    expect(current.capture).toHaveBeenLastCalledWith(expect.any(Number), { aspect: '1:1', size: 1024, view: { position: [180, 3, 6], target: [0, 1, 0], fov: 35 } })
+    expect(store.getCameraSnapshot()).toEqual(before)
+  })
+  it('sets and saves the camera from a shot, or keys it at a time', async () => {
+    const { store, viewport, document, invoke } = setup()
+    const shot = vi.fn(() => ({ position: [4, 3, 6] as [number, number, number], target: [0, 1, 0] as [number, number, number], fov: 30 }))
+    viewport.current = { capture: vi.fn(), frame: vi.fn(), shot, aspect: vi.fn(() => 4 / 3) }
+    await invoke('setWorkspace', { shot: { objectIds: ['a'], azimuth: 20, elevation: 10, fov: 30 } })
+    expect(shot).toHaveBeenCalledWith({ objectIds: ['a'], azimuth: 20, elevation: 10, fov: 30 }, 4 / 3)
+    expect(store.getCameraSnapshot()).toMatchObject({ position: [4, 3, 6], target: [0, 1, 0], fov: 30 })
+    expect(document.save).toHaveBeenCalled()
+    await invoke('setWorkspace', { shot: { azimuth: 0 }, shotAt: 0 })
+    expect(store.getSnapshot().scene.cameraKeys).toEqual([{ time: 0, position: [4, 3, 6], target: [0, 1, 0], fov: 30, easing: 'smooth' }])
   })
   it('imports images through the bridge, omits image bytes from context, and edits vertex selection without saving', async () => {
     const { store, document, invoke } = setup()
