@@ -41,6 +41,7 @@ const STYLES = {
   metal: { surface: 'metal', surfaceScale: 0.3, roughness: 0.4, metalness: 0.85 },
   paint: { surface: 'wood', surfaceScale: 0.5, surfaceStrength: 0.35, roughness: 0.55 },
   dark: { surface: 'none', roughness: 0.9 },
+  backdrop: { surface: 'none', roughness: 0.92 },
 } satisfies Record<string, PartStyle>
 type PartName = keyof typeof STYLES
 
@@ -674,6 +675,49 @@ function bench(params: Params): THREE.BufferGeometry {
 }
 
 /** A made thing's geometry by kind. */
+/**
+ * A seamless studio sweep: the floor runs from the front edge back to a quarter-circle curve that rises into the wall,
+ * built as one smooth sheet (shared normals), so light falls off across it with no corner to catch the eye.
+ */
+function backdrop(params: Params): THREE.BufferGeometry {
+  const w = num(params, 'width'), d = num(params, 'depth'), h = num(params, 'height')
+  const r = Math.min(num(params, 'radius'), d * 0.95, h * 0.95)
+  const back = -d / 2
+  // the profile in (z, y), front to top
+  const profile: [number, number][] = [[d / 2, 0]]
+  const floorSteps = 8
+  for (let i = 1; i <= floorSteps; i++) profile.push([d / 2 - ((d - r) * i) / floorSteps, 0])
+  const curveSteps = 24
+  for (let i = 1; i <= curveSteps; i++) {
+    const a = (i / curveSteps) * (Math.PI / 2)
+    profile.push([back + r - Math.sin(a) * r, r - Math.cos(a) * r])
+  }
+  const wallSteps = 6
+  for (let i = 1; i <= wallSteps; i++) profile.push([back, r + ((h - r) * i) / wallSteps])
+  const across = 12
+  const positions: number[] = [], uvs: number[] = [], indices: number[] = []
+  let length = 0
+  const along = profile.map(([z, y], i) => (length += i ? Math.hypot(z - profile[i - 1][0], y - profile[i - 1][1]) : 0))
+  for (let i = 0; i < profile.length; i++)
+    for (let j = 0; j <= across; j++) {
+      positions.push(-w / 2 + (w * j) / across, profile[i][1], profile[i][0])
+      uvs.push(j / across, along[i] / length)
+    }
+  for (let i = 0; i < profile.length - 1; i++)
+    for (let j = 0; j < across; j++) {
+      const a = i * (across + 1) + j, b = a + across + 1
+      indices.push(a, a + 1, b, a + 1, b + 1, b)
+    }
+  const sheet = new THREE.BufferGeometry()
+  sheet.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  sheet.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  sheet.setIndex(indices)
+  sheet.computeVertexNormals()
+  const parts = new Parts(seeded(1))
+  parts.add('backdrop', sheet, new THREE.Color(str(params, 'color')))
+  return parts.build()
+}
+
 export function structureGeometry(kind: string, params: Params): THREE.BufferGeometry {
   const full = generatorParams(kind, params)
   switch (kind) {
@@ -685,8 +729,9 @@ export function structureGeometry(kind: string, params: Params): THREE.BufferGeo
     case 'crate': return crate(full)
     case 'barrel': return barrel(full)
     case 'bench': return bench(full)
+    case 'backdrop': return backdrop(full)
     default: throw new Error(`${kind} is not a made thing`)
   }
 }
 
-export const STRUCTURE_KINDS = ['building', 'boat', 'dock', 'fence', 'lantern', 'crate', 'barrel', 'bench'] as const
+export const STRUCTURE_KINDS = ['building', 'boat', 'dock', 'fence', 'lantern', 'crate', 'barrel', 'bench', 'backdrop'] as const

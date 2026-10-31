@@ -61,6 +61,8 @@ import {
   Package,
   Armchair,
   Shapes,
+  Lightbulb,
+  Presentation,
 } from 'lucide-react'
 import { GENERATORS } from '../lib/generatorSpecs.mjs'
 import { Choice } from './Controls'
@@ -116,6 +118,8 @@ const SHAPES = [
   'barrel',
   'bench',
   'model',
+  'light',
+  'backdrop',
 ] as const
 const shapeLabel = (kind: string) => GENERATORS[kind]?.label ?? kind[0].toUpperCase() + kind.slice(1)
 const SCENE_SUFFIXES = ['.pure3d']
@@ -153,6 +157,8 @@ const icons = {
   barrel: Cylinder,
   bench: Armchair,
   model: Shapes,
+  light: Lightbulb,
+  backdrop: Presentation,
 }
 const basename = (title: string) =>
   title

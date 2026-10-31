@@ -9,9 +9,11 @@ import {
   updatePose,
   nodeTransform,
 } from '../lib/threeScene'
-import { transformOperations } from '../lib/scene'
+import { descendants, transformOperations } from '../lib/scene'
 import { VertexHandles } from '../lib/VertexHandles'
-import type { Vec3 } from '../types'
+import type { ShotSpec, Vec3 } from '../types'
+import { setLightMarkers } from '../lib/lights'
+import { aspectRatio, blockers, frameShot, type FramedShot, type Shot } from '../lib/shots'
 import { demandRenderer } from '../lib/demandRenderer'
 import { LookRig, resolveLook } from '../lib/look'
 import { cameraPose } from '../lib/cameraTrack'
@@ -27,8 +29,14 @@ import {
   isBlankCapture,
 } from '../lib/captureCheck'
 
+/** A still's shape and size (long edge in pixels), and a camera to take it from instead of the current one. */
+export type CaptureOptions = { aspect?: string; size?: number; view?: Shot }
 export interface ViewportAPI {
-  capture: (time?: number) => Promise<string>
+  capture: (time?: number, options?: CaptureOptions) => Promise<string>
+  /** The camera for a shot spec, framed on its objects (or everything) at the playhead, for a frame of this aspect. */
+  shot: (spec: ShotSpec, aspect?: number) => FramedShot
+  /** Width over height of the frame the editing camera shows. */
+  aspect: () => number
   frame: () => void
 }
 export const SceneViewport = memo(function SceneViewport({
@@ -130,16 +138,26 @@ export const SceneViewport = memo(function SceneViewport({
       }
       renderer.setScissorTest(false)
     }
-    // Stills render off screen, so they work while Pure3D is hidden too.
-    const renderStill = (size: Size): string => {
-      const { w, h } = frameArea(size)
+    // Stills render off screen, so they work while Pure3D is hidden too. Light markers stay out of them.
+    const renderStill = (size: Size, exact = false): string => {
+      const { w, h } = exact ? { w: size.width, h: size.height } : frameArea(size)
       const width = Math.max(1, Math.round(w)), height = Math.max(1, Math.round(h))
       camera.aspect = width / height; camera.updateProjectionMatrix()
+      setLightMarkers(built.root, false)
       try {
         return rig.still(width, height)
       } finally {
+        setLightMarkers(built.root, !store.getSnapshot().cameraPreview)
         composerSize = ''
       }
+    }
+    /** A still's exact size for an aspect and long edge; null keeps the on-screen frame. */
+    const stillSize = (options: CaptureOptions): Size | null => {
+      if (!options.aspect && !options.size) return null
+      const { w, h } = frameArea(viewSize() ?? lastSize ?? FALLBACK_CAPTURE_SIZE)
+      const ratio = options.aspect ? aspectRatio(options.aspect) : w / h
+      const long = options.size ?? Math.min(2048, Math.max(1024, Math.round(Math.max(w, h))))
+      return ratio >= 1 ? { width: long, height: Math.round(long / ratio) } : { width: Math.round(long * ratio), height: long }
     }
     let lookKey: unknown[] = []
     const applyLook = () => {
@@ -161,8 +179,10 @@ export const SceneViewport = memo(function SceneViewport({
     }
     watchTextures()
     let cameraPersistTimeout: number | undefined
+    // true while a capture has the camera somewhere else (a preview shot or a view): nothing it does is saved
+    let capturing = false
     const updateCamera = () => {
-      if (store.getSnapshot().cameraPreview) return
+      if (capturing || store.getSnapshot().cameraPreview) return
       const config = {
         position: camera.position.toArray() as Vec3,
         target: orbit.target.toArray() as Vec3,
@@ -204,6 +224,7 @@ export const SceneViewport = memo(function SceneViewport({
         orbit.update()
       }
       applyLook()
+      setLightMarkers(built.root, !state.cameraPreview)
       orbit.enabled = !state.cameraPreview
       grid.visible = document.settings.grid && !state.cameraPreview
       axes.visible = document.settings.grid && !state.cameraPreview
@@ -379,34 +400,67 @@ export const SceneViewport = memo(function SceneViewport({
     renderer.domElement.addEventListener('pointerdown', down)
     renderer.domElement.addEventListener('pointerup', up)
     api.current = {
-      capture: async (time = store.getSnapshot().time) => {
+      capture: async (time = store.getSnapshot().time, options: CaptureOptions = {}) => {
         const capturedDocument = document
         await built.ready
         if (document !== capturedDocument)
           throw new Error('Scene changed while preparing the viewport capture')
         if (disposed || renderer.getContext().isContextLost())
           throw new Error('Viewport renderer unavailable')
-        updatePose(document, built.objects, time)
-        if (store.getSnapshot().cameraPreview) {
-          const shot = cameraPose(document, time)
-          camera.position.fromArray(shot.position); orbit.target.fromArray(shot.target); camera.fov = shot.fov
-        }
-        orbit.update()
-        box?.update()
         // Render a fresh still at the on-screen size, or, while the tab is hidden,
         // at the last known (or a fixed) size, off screen so it never comes back blank.
-        const size = viewSize() ?? lastSize ?? FALLBACK_CAPTURE_SIZE
+        const exact = stillSize(options)
+        const size = exact ?? viewSize() ?? lastSize ?? FALLBACK_CAPTURE_SIZE
         let image: string
         try {
+          updatePose(document, built.objects, time)
+          capturing = true
+          if (store.getSnapshot().cameraPreview) {
+            const shot = cameraPose(document, time)
+            camera.position.fromArray(shot.position); orbit.target.fromArray(shot.target); camera.fov = shot.fov
+          }
+          if (options.view) {
+            camera.position.fromArray(options.view.position); orbit.target.fromArray(options.view.target); camera.fov = options.view.fov
+          }
+          orbit.update()
+          box?.update()
           applyLook()
-          image = renderStill(size)
+          image = renderStill(size, !!exact)
         } finally {
+          capturing = false
           updatePose(document, built.objects, store.getSnapshot().time)
           cameraSignature = ''; refresh()
         }
         if (await isBlankCapture(size, image, decodeCapturePixels))
           throw new Error(BLANK_CAPTURE_MESSAGE)
         return image
+      },
+      shot: (spec, aspect = 16 / 9) => {
+        const state = store.getSnapshot()
+        updatePose(document, built.objects, state.time)
+        built.root.updateMatrixWorld(true)
+        const subject = new THREE.Box3()
+        const nodes = spec.objectIds?.map(id => {
+          const node = built.objects.get(id)
+          if (!node) throw new Error(`No object with id ${id}`)
+          return node
+        }) ?? [built.root]
+        setLightMarkers(built.root, false)
+        try {
+          for (const node of nodes) subject.expandByObject(node)
+        } finally {
+          setLightMarkers(built.root, !state.cameraPreview)
+        }
+        const sphere = subject.isEmpty() ? new THREE.Sphere(new THREE.Vector3(), 1) : subject.getBoundingSphere(new THREE.Sphere())
+        const shot = frameShot(spec, sphere, aspect, camera.fov)
+        // what would hide the subject: the whole scene when framing everything, nothing then counts as in the way
+        const own = new Set(spec.objectIds ? spec.objectIds.flatMap(id => [...descendants(document, id)]) : document.objects.map(o => o.id))
+        const blockedBy = blockers(built.root, shot, spec.position ? 0 : sphere.radius, own)
+        return blockedBy.length ? { ...shot, blockedBy } : shot
+      },
+      aspect: () => {
+        const { w, h } = frameArea(viewSize() ?? lastSize ?? FALLBACK_CAPTURE_SIZE)
+        return w / h
       },
       frame: () => {
         const state = store.getSnapshot()

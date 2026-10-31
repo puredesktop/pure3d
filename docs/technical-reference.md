@@ -19,6 +19,17 @@ base color to white; adjust it afterward to tint the image. Tile U/V changes
 repetition. Primitives retain their UVs when converted; meshes without UVs
 receive box projection. **Box UV mapping** replaces existing UVs explicitly.
 
+Light objects (`kind: light`, `src/lib/lights.ts`) are groups holding a
+three.js point, spot or rect-area light; spots and areas shine down their local
+-y or at a world target, re-aimed after every pose. Their markers carry
+`userData.helper`: they show while editing and are hidden in stills, camera
+previews and exports. Lanterns with `params.light` carry their own shadowless
+point light. `backdrop` is a seamless cyclorama sweep built in
+`src/lib/structures.ts`. `material.preset` (`src/lib/materialPresets.mjs`)
+fills in a named real material under the object's own values. The `night`
+environment (`NightSky` in `src/lib/look.ts`) draws a star field and moon on a
+dome and lights reflections from it; the sun light becomes moonlight.
+
 Drag the viewport to orbit, click a model to select, and use the transform gizmo
 to move (`W`), rotate (`E`) or scale (`R`). `F` frames the selection. Space toggles
 playback; Ctrl/Cmd-Z and Ctrl/Cmd-Shift-Z undo and redo.
@@ -62,6 +73,11 @@ the UI, viewport and document serialization. Edits validate an entire
 transaction before committing and need no version or document target tokens.
 Viewport capture returns an actual rendered PNG through the platform's
 tool-image contract and requires a vision-capable assistant.
+It takes an `aspect`, a long-edge `size` and up to four `views`; views are
+framed by `src/lib/shots.ts` (`frameShot` fits the subject's bounding sphere
+for the frame's aspect) and rendered one after another, and the saved camera
+is restored after each. `setWorkspace.shot` uses the same framing to set and
+save the editing camera, or with `shotAt` to upsert a camera keyframe.
 `editScene` supports `moveVertex`, `subdivide` and `unwrap`, as well as texture
 settings in material updates. `setWorkspace.selectedVertex` operates the
 same vertex selection as the UI. `getScene` omits embedded image bytes;

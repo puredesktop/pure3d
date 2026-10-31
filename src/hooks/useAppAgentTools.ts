@@ -1,3 +1,4 @@
+import { aspectRatio } from '../lib/shots'
 import {
   usePlatformAgentTools,
   type AgentToolHandler,
@@ -108,8 +109,8 @@ export function createToolHandlers(
       return committed(before, { operations: args.operations.length })
     }),
     setWorkspace: bind('setWorkspace', async args => {
-      const { frameSelection, ...patch } = args
-      if (frameSelection && !viewport.current)
+      const { frameSelection, shot, shotAt, ...patch } = args
+      if ((frameSelection || shot) && !viewport.current)
         throw new Error('Viewport renderer unavailable')
       store.workspace(patch)
       let saved: Record<string, unknown> = {}
@@ -117,6 +118,15 @@ export function createToolHandlers(
         viewport.current!.frame()
         const path = await document.save()
         saved = { path, camera: cameraReply(store.getCameraSnapshot()) }
+      }
+      if (shot) {
+        const { blockedBy, ...camera } = viewport.current!.shot(shot, shotAt === undefined ? viewport.current!.aspect() : 16 / 9)
+        if (shotAt === undefined) {
+          store.setCamera(camera)
+          store.persistCamera()
+        } else store.edit([{ op: 'cameraKeyframe', keyframe: { time: shotAt, ...camera, easing: 'smooth' } }])
+        const path = await document.save()
+        saved = { path, camera: cameraReply(camera), ...(shotAt === undefined ? {} : { cameraKeyAt: shotAt }), ...(blockedBy ? { blockedBy } : {}) }
       }
       const state = store.getSnapshot()
       const selected = state.scene.objects.find(o => o.id === state.selectedId)
@@ -188,25 +198,29 @@ export function createToolHandlers(
         ...historyEntries(current(), past, future),
       })
     }),
-    captureViewport: bind('captureViewport', async () => {
+    captureViewport: bind('captureViewport', async args => {
       if (!viewport.current) throw new Error('Viewport renderer unavailable')
       const snapshot = store.getSnapshot()
-      const image = await viewport.current.capture(snapshot.time)
+      const options = { aspect: args.aspect, size: args.size }
+      const ratio = args.aspect ? aspectRatio(args.aspect) : viewport.current.aspect()
+      // each view is framed and rendered in turn; the saved camera is never touched
+      const views = args.views?.map(spec => viewport.current!.shot(spec, ratio)) ?? [undefined]
+      const images: string[] = []
+      for (const view of views) {
+        const camera = view && { position: view.position, target: view.target, fov: view.fov }
+        images.push(await viewport.current.capture(snapshot.time, { ...options, view: camera }))
+      }
       return {
         ...result({
           ok: true,
-          note: `Rendered viewport PNG of "${snapshot.scene.title}" at ${snapshot.time} s${
-            snapshot.cameraPreview ? ' through the camera track' : ''
+          note: `Rendered ${images.length > 1 ? `${images.length} viewport PNGs` : 'viewport PNG'} of "${snapshot.scene.title}" at ${snapshot.time} s${
+            snapshot.cameraPreview && !args.views ? ' through the camera track' : ''
           }.`,
           time: snapshot.time,
           path: document.doc.path,
+          ...(args.views ? { views: views.map(view => ({ ...cameraReply(view!), ...(view!.blockedBy ? { blockedBy: view!.blockedBy } : {}) })) } : {}),
         }),
-        images: [
-          {
-            mimeType: 'image/png',
-            data: image.split(',')[1],
-          },
-        ],
+        images: images.map(image => ({ mimeType: 'image/png', data: image.split(',')[1] })),
       }
     }),
   }

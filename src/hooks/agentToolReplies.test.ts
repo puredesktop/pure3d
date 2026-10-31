@@ -86,6 +86,8 @@ function setup() {
     current: {
       capture: vi.fn().mockResolvedValue('data:image/png;base64,AQID'),
       frame: vi.fn(),
+      shot: vi.fn(() => ({ position: [4, 3, 6] as [number, number, number], target: [0, 1, 0] as [number, number, number], fov: 35 })),
+      aspect: vi.fn(() => 16 / 9),
     } as ViewportAPI | null,
   }
   const handlers = createToolHandlers(store, document, viewport)

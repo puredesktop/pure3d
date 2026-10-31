@@ -31,6 +31,25 @@ gutters; a chimney; a porch with railings and steps; `windowGlow` lights the
 windows), `boat`, `dock`, `fence`, `lantern`, `crate`, `barrel` and `bench`.
 Build houses, cabins, boathouses and their props from these, not from boxes.
 
+**Lights.** A `light` object really lights and shadows what is around it:
+`type` `point` (a bulb, lamp or fire), `spot` (an aimed cone; `angle`,
+`softness`) or `area` (a soft rectangular panel such as a softbox or a window,
+`width` × `height`; no shadows). `intensity` 1 is a normal lamp a few metres
+away; 2-4 makes a strong key light (an area light's brightness is spread over
+its size, so a bigger panel is softer, not brighter). Spots and areas shine down their local -y
+unless `aim` is `target`, which points them at `targetX/Y/Z` in world metres.
+A light inside a lamp's glass needs `shadows: "no"` (or sit it just outside),
+and a `lantern` with `params.light` lights its own surroundings. Pair lights
+with an emissive material on the visible bulb. Light markers show while
+editing and never in renders.
+
+**Product shots.** Put the product on a `backdrop` (a seamless studio sweep
+from floor to wall) under `environment: "studio"`, then light it with two or
+three area lights: a large soft key about 45° to one side and above, a weaker
+fill on the other side, and a rim light behind for an edge highlight. Use a
+long lens (`fov` 20-30) from a low elevation, a material preset on the product,
+and `focusDistance` with a little `aperture` for depth.
+
 Kit models are ready-made CC0 models from Poly Haven bundled with the app
 (`public/kit`, credits in `public/kit/CREDITS.md`). Add one with kind `model`
 and `params.name` (barrel, crate-large, bucket, lantern-wooden, oil-lamp,
@@ -47,6 +66,15 @@ through colour variation; and clutter where things meet the ground (kit stones,
 branches, ferns, stumps). Repeat until the close-ups hold up, then go back to
 the hero shots.
 
+Material presets name a real material: `material.preset` is one of `gold`,
+`silver`, `chrome`, `copper`, `brass`, `steel`, `aluminium`, `iron`, `glass`,
+`frosted-glass`, `ceramic`, `porcelain`, `plastic`, `glossy-plastic`,
+`rubber`, `velvet`, `satin`, `fabric`, `leather`, `car-paint`,
+`varnished-wood`, `marble`, `concrete` or `plaster`. It fills in colour,
+metalness, roughness, clearcoat, transmission, sheen and surface; values set
+beside it win (`preset: "gold", color: "#f0d090"` is a paler gold), and
+choosing a preset in an update replaces the older values it sets.
+
 Surfaces give any material real-world detail without UVs: `material.surface`
 is one of `wood`, `planks`, `stone`, `concrete`, `plaster`, `brick`, `tiles`,
 `metal`, `fabric`, `leather`, `marble`, `bark`, `ground` or `sand`, laid over
@@ -56,8 +84,11 @@ unless a scene says otherwise (`surface: "none"` for smooth). Give floors,
 walls, furniture and props a surface; smooth plain colour reads as a toy.
 
 Light and finish live in `settings.look`, merged on each `settings` edit:
-`environment` `sky` (physical sky with clouds and a sun) or `studio` (soft
-studio light on the background colour); `sunElevation` and `sunAzimuth` in
+`environment` `sky` (physical sky with clouds and a sun), `studio` (soft
+studio light on the background colour) or `night` (a dark sky with stars and
+the moon; the sun settings place the moon and set its cool moonlight, `stars`
+0-1 sets how many show; light the scene with lights, lit windows and lanterns,
+and raise `exposure` to 1.3-2 if it reads too dark); `sunElevation` and `sunAzimuth` in
 degrees (5-15 is golden hour; put the sun to the side of the camera, not
 behind it, so shadows show); `sunIntensity`, `haze`, `clouds`, `shadows`
 (`soft`, `sharp`, `off`), `fog` 0-1 (sized to the scene, coloured like the
@@ -68,6 +99,21 @@ ahead of the camera), and a grade: `saturation`, `contrast`, `warmth` and
 `vignette`. Materials also take `emissive` with `emissiveIntensity`,
 `clearcoat`, `transmission` and `sheen`. Turn the grid off for finished
 shots, frame with a camera shot, then look with `captureViewport`.
+
+**Framing and looking.** `setWorkspace` `shot` sets and saves the camera:
+either `{position, target, fov?}` exactly, or framed on `objectIds` (default:
+the whole scene) from `azimuth` (degrees round it; 0 looks from +z, 90 from
++x) and `elevation` (degrees above), with the subject filling `fill` of the
+frame (0.85 by default; 0.4 leaves room around it, 1.2 crops tight) or at an
+exact `distance`. Add `shotAt` (seconds) to make it a camera keyframe instead.
+The reply's `blockedBy` lists objects standing between the camera and the
+subject (a tree of a scatter, a wall); move closer, change the angle or raise
+the scatter's `avoid` radius rather than accept a blocked shot.
+`captureViewport` takes `aspect` (`16:9`, `3:2`, `4:3`, `1:1`, `4:5`, `2:3`,
+`9:16`, `21:9`), `size` (long edge, 256-2048 pixels) and up to four `views`,
+each a shot in the same form; it returns one image per view and the camera
+each used, without moving the saved camera. Check a subject from three sides
+in one call, then keep the best view with `shot`.
 
 ## Replies and reading the scene
 

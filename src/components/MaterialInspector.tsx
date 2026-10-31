@@ -7,6 +7,7 @@ import { ToggleSwitch } from '@purescience/platform-ui/components/common/inputs/
 import { ImagePlus, Layers, Trash2 } from 'lucide-react'
 import { Choice, ColorField, NumberField } from './Controls'
 import { SURFACES, SURFACE_KINDS } from '../lib/surfaceSpecs.mjs'
+import { MATERIAL_PRESETS, MATERIAL_PRESET_NAMES } from '../lib/materialPresets.mjs'
 import type { SurfaceKind } from '../lib/surfaces'
 import { applyImageTexture, importWorkspaceTexture } from '../lib/workflows'
 import {
@@ -127,6 +128,11 @@ export function MaterialInspector({
           </ToolbarControl>
         )}
       </div>
+      <Choice
+        label={`Material: ${object.material.preset && object.material.preset !== 'none' ? MATERIAL_PRESETS[object.material.preset].label : 'Custom'}`}
+        options={[{ value: 'none', label: 'Custom' }, ...MATERIAL_PRESET_NAMES.map(name => ({ value: name, label: MATERIAL_PRESETS[name].label }))]}
+        onChange={preset => update({ preset: preset as NonNullable<SceneObject['material']['preset']> })}
+      />
       <ColorField
         label={texture ? 'Texture tint' : 'Base color'}
         value={material.color}

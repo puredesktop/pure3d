@@ -6,6 +6,7 @@ import { loadTexture, TextureAssetCache } from './textures'
 import { applySurface } from './surfaces'
 import { disposeWater } from './water'
 import { kitNode } from './kitModels'
+import { aimLights, disposeLightParts, lightObject, removeLightMarkers } from './lights'
 import type { PartStyle } from './structures'
 import { SURFACES } from './surfaceSpecs.mjs'
 import type { SceneDocument, SceneObject, Vec3 } from '../types'
@@ -22,6 +23,7 @@ type ReconciledScene = BuiltScene & {
 }
 
 function disposeNode(node: THREE.Object3D) {
+  disposeLightParts(node)
   if (!(node instanceof THREE.Mesh)) return
   disposeWater(node)
   node.geometry.dispose()
@@ -84,8 +86,8 @@ function materialsFor(node: THREE.Mesh, properties: Omit<ResolvedMaterial, 'text
 
 /** Every visible surface takes shadows; solid things cast them (ground and water only receive). */
 function lightNode(node: THREE.Object3D, kind: string) {
-  node.castShadow = kind !== 'terrain' && kind !== 'water' && kind !== 'group'
-  node.receiveShadow = kind !== 'group'
+  node.castShadow = kind !== 'terrain' && kind !== 'water' && kind !== 'group' && kind !== 'light'
+  node.receiveShadow = kind !== 'group' && kind !== 'light'
 }
 
 /** Incrementally projects immutable scene snapshots into a stable Three.js tree. */
@@ -147,7 +149,7 @@ export function createSceneReconciler(
         ...(generated ? { params: object.params ?? {}, on: object.kind === 'scatter' ? scatterDependency(document, object) : '' } : {}),
       })
       let node = objects.get(object.id)
-      const needsGroup = object.kind === 'group' || object.kind === 'model'
+      const needsGroup = object.kind === 'group' || object.kind === 'model' || object.kind === 'light'
       // A generated shape is rebuilt whole when its parameters change (a scatter's instance count can change).
       const stale = !!node && generated && objectSignatures.get(object.id) !== geometrySignature
       const wrongKind = !!node && (node instanceof THREE.InstancedMesh) !== (object.kind === 'scatter')
@@ -158,6 +160,8 @@ export function createSceneReconciler(
         }
         node = object.kind === 'model'
           ? modelNode(object)
+          : object.kind === 'light'
+          ? lightObject(object)
           : needsGroup
           ? new THREE.Group()
           : generated
@@ -239,6 +243,9 @@ export function buildScene(document: SceneDocument, time = 0): BuiltScene {
     if (object.kind === 'group') {
       node = new THREE.Group()
       material.dispose()
+    } else if (object.kind === 'light') {
+      node = lightObject(object)
+      material.dispose()
     } else if (object.kind === 'model') {
       const model = kitNode(String(object.params?.name ?? ''))
       node = model.node
@@ -277,6 +284,7 @@ export function updatePose(
     node.rotation.set(...transform.rotation)
     node.scale.fromArray(transform.scale)
   }
+  aimLights(objects.values())
 }
 export function disposeScene(root: THREE.Object3D) {
   root.traverse(node => {
@@ -392,6 +400,7 @@ export async function exportScene(
         node.removeFromParent()
         disposeScene(node)
       }
+    removeLightMarkers(built.root)
     built.root.updateMatrixWorld(true)
     if (format === 'obj') {
       const { OBJExporter } = await import('three/addons/exporters/OBJExporter.js')

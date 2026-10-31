@@ -1,6 +1,7 @@
 import { sceneSchema, operationSchema } from './schemas.mjs'
 import { GENERATOR_KINDS, generatorParams } from './generatorSpecs.mjs'
 import { meshGeometry, moveVertex, boxUV } from './geometry'
+import { presetProperties } from './materialPresets.mjs'
 import type {
   SceneDocument,
   SceneObject,
@@ -60,7 +61,9 @@ export function resolveMaterial(scene: SceneDocument, object: SceneObject): Reso
   }
   const resolved = { ...defaultMaterial, ...defaultMaterialFor(object.kind, object.params) }
   for (const entry of chain) {
-    const { texture, ...properties } = entry.material
+    const { texture, preset, ...properties } = entry.material
+    // a preset fills in a real material; the object's own values set beside it win
+    if (preset && preset !== 'none') Object.assign(resolved, presetProperties(preset))
     Object.assign(resolved, properties)
     if (texture !== undefined)
       resolved.texture = texture
@@ -249,6 +252,10 @@ export function applyOperations(
         if (params) o.params = { ...(o.params ?? {}), ...params }
         if (material) {
           const { texture, ...properties } = material
+          // a new preset replaces the older values it sets, unless this same patch sets them too
+          if (properties.preset && properties.preset !== 'none')
+            for (const key of Object.keys(presetProperties(properties.preset)))
+              if (!(key in properties)) delete o.material[key as keyof SceneObject['material']]
           Object.assign(o.material, properties)
           if (texture !== undefined) {
             const inherited = resolveMaterial(next, o).texture

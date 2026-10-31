@@ -5,11 +5,13 @@ import { GENERATORS, generatorParams } from '../lib/generatorSpecs.mjs'
 import type { Operation, SceneDocument, SceneObject } from '../types'
 
 type Look = NonNullable<SceneDocument['settings']['look']>
+const ENVIRONMENTS = { sky: 'Sky and sun', studio: 'Studio', night: 'Night sky' } as const
 const title = (text: string) => text[0]!.toUpperCase() + text.slice(1)
 
 /** The scene's light and finish: sky or studio, the sun and its shadows, fog, and the camera's finishing passes. */
 export function LookInspector({ scene, edit }: { scene: SceneDocument; edit: (ops: Operation[]) => void }) {
   const look = resolveLook(scene)
+  const night = look.environment === 'night'
   const set = (patch: Look) => edit([{ op: 'settings', settings: { look: patch } }])
   const number = (key: keyof Look, label: string, min: number, max: number, step: number, unit?: string) => (
     <NumberField
@@ -27,13 +29,14 @@ export function LookInspector({ scene, edit }: { scene: SceneDocument; edit: (op
     <>
       <SidebarSectionLabel>Light and finish</SidebarSectionLabel>
       <Choice
-        label={`Light: ${look.environment === 'sky' ? 'Sky and sun' : 'Studio'}`}
-        options={[{ value: 'sky', label: 'Sky and sun' }, { value: 'studio', label: 'Studio' }]}
+        label={`Light: ${ENVIRONMENTS[look.environment]}`}
+        options={Object.entries(ENVIRONMENTS).map(([value, label]) => ({ value, label }))}
         onChange={environment => set({ environment: environment as Look['environment'] })}
       />
-      {number('sunElevation', 'Sun height', -12, 90, 1, '°')}
-      {number('sunAzimuth', 'Sun direction', 0, 360, 5, '°')}
-      {number('sunIntensity', 'Sun strength', 0, 20, 0.1)}
+      {number('sunElevation', night ? 'Moon height' : 'Sun height', -12, 90, 1, '°')}
+      {number('sunAzimuth', night ? 'Moon direction' : 'Sun direction', 0, 360, 5, '°')}
+      {number('sunIntensity', night ? 'Moonlight' : 'Sun strength', 0, 20, 0.1)}
+      {night && number('stars', 'Stars', 0, 1, 0.05)}
       <Choice
         label={`Shadows: ${title(look.shadows)}`}
         options={['soft', 'sharp', 'off'].map(value => ({ value, label: title(value) }))}
@@ -70,6 +73,7 @@ export function GeneratorInspector({ object, scene, edit }: { object: SceneObjec
       <SidebarSectionLabel>{spec.label}</SidebarSectionLabel>
       {spec.params.map(param => {
         const value = params[param.key]!
+        if (param.show && !Object.entries(param.show).every(([key, values]) => values.includes(String(params[key])))) return null
         if (param.type === 'number')
           return <NumberField key={param.key} label={param.label} value={Number(value)} min={param.min} max={param.max} step={param.step ?? (param.max - param.min > 20 ? 1 : 0.05)} unit={param.unit} onChange={next => set(param.key, next)} />
         if (param.type === 'color')
