@@ -206,6 +206,25 @@ export class SceneStore {
       canRedo: false,
     }, { domain: 'content', affected: ['scene', 'history', 'camera'] })
   }
+  /**
+   * Another copy of the app saved the scene: take it in without moving this copy's view or playhead. Undo cannot cross it,
+   * since going back would undo the other copy's work as well.
+   */
+  takeIn(scene: SceneDocument) {
+    const next = parseScene(scene)
+    this.past = []
+    this.future = []
+    this.savedCamera = copyCamera(next.settings.camera)
+    const selected = next.objects.find(o => o.id === this.state.selectedId)
+    this.publish({
+      scene: next,
+      canUndo: false,
+      canRedo: false,
+      time: Math.min(this.state.time, next.settings.duration),
+      selectedId: selected ? this.state.selectedId : null,
+      selectedVertex: selected?.geometry && this.state.selectedVertex !== null && this.state.selectedVertex < selected.geometry.positions.length / 3 ? this.state.selectedVertex : null,
+    }, { domain: 'content', affected: ['scene', 'history'] })
+  }
   workspace(patch: WorkspacePatch) {
     if (
       patch.selectedId &&

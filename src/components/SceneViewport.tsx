@@ -43,15 +43,21 @@ export const SceneViewport = memo(function SceneViewport({
   store,
   api,
   onError,
+  lookingOnly = false,
 }: {
   store: SceneStore
   api: React.MutableRefObject<ViewportAPI | null>
   onError: (error: unknown) => void
+  /** Held in a page: orbit and zoom, at a gentler resolution, with no handles and nothing to select. */
+  lookingOnly?: boolean
 }) {
   const host = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
   const callbacks = useRef({ onError })
   callbacks.current = { onError }
+  const looking = useRef({ only: lookingOnly, apply: () => {} })
+  looking.current.only = lookingOnly
+  useEffect(() => looking.current.apply(), [lookingOnly])
   useEffect(() => {
     if (!host.current) return
     const element = host.current
@@ -69,7 +75,8 @@ export const SceneViewport = memo(function SceneViewport({
       )
       return
     }
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+    const pixelRatio = () => Math.min(devicePixelRatio, looking.current.only ? 1 : 2)
+    renderer.setPixelRatio(pixelRatio())
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.domElement.setAttribute('aria-label', '3D scene viewport')
     renderer.domElement.setAttribute('tabindex', '0')
@@ -229,7 +236,7 @@ export const SceneViewport = memo(function SceneViewport({
       grid.visible = document.settings.grid && !state.cameraPreview
       axes.visible = document.settings.grid && !state.cameraPreview
       gizmo.setMode(state.mode)
-      gizmo.enabled = !state.playing && !state.cameraPreview
+      gizmo.enabled = !state.playing && !state.cameraPreview && !looking.current.only
       if (
         selectedId !== state.selectedId ||
         (vertices?.index ?? null) !== state.selectedVertex ||
@@ -262,7 +269,7 @@ export const SceneViewport = memo(function SceneViewport({
           overlay.add(box)
         }
       }
-      gizmo.getHelper().visible = !!gizmo.object && !state.playing && !state.cameraPreview
+      gizmo.getHelper().visible = !!gizmo.object && !state.playing && !state.cameraPreview && !looking.current.only
       if (box) box.visible = !state.cameraPreview
       if (vertices) vertices.points.visible = !state.cameraPreview
       invalidate()
@@ -354,6 +361,7 @@ export const SceneViewport = memo(function SceneViewport({
     }
     const up = (e: PointerEvent) => {
       if (
+        looking.current.only ||
         !pointer ||
         pointer.gizmo ||
         Math.hypot(pointer.x - e.clientX, pointer.y - e.clientY) > 4
@@ -507,9 +515,15 @@ export const SceneViewport = memo(function SceneViewport({
       return store.getSnapshot().playing
     })
     invalidate = rendering.invalidate
+    looking.current.apply = () => {
+      if (renderer.getPixelRatio() !== pixelRatio()) renderer.setPixelRatio(pixelRatio())
+      refresh()
+      invalidate()
+    }
     invalidate()
     return () => {
       disposed = true
+      looking.current.apply = () => {}
       api.current = null
       unsubscribeContent()
       unsubscribeWorkspace()

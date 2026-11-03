@@ -1,0 +1,93 @@
+/* Compact Pure3D, held in a page (useCompactInRoom). The frame carries data-compact-room only then, and every rule here
+   starts from it, so with compact off nothing in this file applies. Chrome is hidden, not removed: everything stays
+   mounted, so state stays and the agent's tools keep working. Full app gives it all back. */
+
+/* The app header, the scene's title line, the toolbar, the object list, the inspector, the timeline. */
+[data-compact-room] > header,
+[data-compact-room] .standalone-header,
+[data-compact-room] .scene-titlebar,
+[data-compact-room] .scene-toolbar,
+[data-compact-room] .outline,
+[data-compact-room] .inspector,
+[data-compact-room] .timeline,
+[data-compact-room] .viewport-caption {
+  display: none;
+}
+
+/* The scene is the page, with its strip of shots under it. */
+[data-compact-room] .scene-body {
+  border-bottom: 0;
+}
+[data-compact-room] .compact-shots {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 10px;
+  overflow-x: auto;
+  border-top: 1px solid var(--scene-line);
+  scrollbar-width: none;
+}
+[data-compact-room] .compact-shots button {
+  flex: none;
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--scene-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+[data-compact-room] .compact-shots button:hover {
+  color: var(--scene-text);
+  background: var(--scene-line);
+}
+[data-compact-room] .compact-shots button[aria-pressed='true'] {
+  color: var(--scene-text);
+  background: var(--scene-line);
+  font-weight: 600;
+}
+[data-compact-room] .compact-shots button:focus-visible {
+  outline: 2px solid var(--scene-accent, currentColor);
+  outline-offset: 1px;
+}
+[data-compact-room] .compact-shots-rule {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 8px;
+  background: var(--scene-line);
+}
+[data-compact-room] .compact-shots-hint {
+  flex: none;
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--scene-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* An empty scene says so, with nothing to press: adding things is for the full app. */
+[data-compact-room] .empty-scene button {
+  display: none;
+}
+
+/* Held inside an entry of a room: one flat surface, in the room's light whatever the desk's theme. */
+html[data-held-in-room]:has([data-compact-room]) {
+  color-scheme: light;
+  --scene-line: #dde1e7;
+  --scene-muted: #5d6674;
+  --scene-text: #161d27;
+}
+html[data-held-in-room]:has([data-compact-room]),
+html[data-held-in-room]:has([data-compact-room]) body,
+html[data-held-in-room]:has([data-compact-room]) [data-compact-room] {
+  background: #ffffff;
+  color: #161d27;
+}
