@@ -59,3 +59,18 @@ describe('workspace hotkeys', () => {
     expect(viewport.frame).toHaveBeenCalledOnce()
   })
 })
+
+it('held in a page, keys can only frame the view: nothing changes the scene or starts playing', () => {
+  const store = { getSnapshot: () => ({ playing: false, selectedId: 'x' }), workspace: vi.fn(), history: vi.fn(), edit: vi.fn() }
+  const viewport = { frame: vi.fn() }
+  const press = (init: KeyboardEventInit) => handleWorkspaceHotkey(new KeyboardEvent('keydown', init), store, viewport, action => { action() }, true)
+  press({ key: 'Delete' })
+  press({ key: 'z', metaKey: true })
+  press({ key: ' ', code: 'Space' })
+  press({ key: 'r' })
+  expect(store.edit).not.toHaveBeenCalled()
+  expect(store.history).not.toHaveBeenCalled()
+  expect(store.workspace).not.toHaveBeenCalled()
+  press({ key: 'f' })
+  expect(viewport.frame).toHaveBeenCalledOnce()
+})

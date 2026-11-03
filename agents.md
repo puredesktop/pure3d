@@ -211,3 +211,9 @@ are unsupported. Export GLB for textures and object-transform animation,
 OBJ/STL for current-pose geometry, or PNG for a finished render. A
 successful geometry export does not prove the scene's visual appearance;
 vision-capable assistants can inspect `3d.captureViewport` when needed.
+
+## Held in a page
+
+Held inside a room or the Personal agent's page, Pure3D is the scene to orbit with a strip of its shots and angles. Your
+tools work as ever, and an edit you make there is merged into the file with whatever the full app has saved. That copy's
+view is its own: its camera is never saved, so set a camera for the document from a tool, not by looking around.

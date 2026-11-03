@@ -247,7 +247,7 @@ describe('Scene document integration with the shared lifecycle', () => {
     expect(events.bridge.call).toHaveBeenCalledWith(M.WORKSPACE_CLOSE_READY, [
       { requestId: 'close-3d' },
     ])
-    const closeReady = events.bridge.call.mock.calls.findIndex(([method]) => method === M.WORKSPACE_CLOSE_READY)
+    const closeReady = (events.bridge.call.mock.calls as unknown[][]).findIndex(([method]) => method === M.WORKSPACE_CLOSE_READY)
     expect(
       documents.autosavePlatformDocument.mock.invocationCallOrder[0],
     ).toBeLessThan(events.bridge.call.mock.invocationCallOrder[closeReady]!)

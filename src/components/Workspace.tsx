@@ -66,6 +66,7 @@ import {
 } from 'lucide-react'
 import { GENERATORS } from '../lib/generatorSpecs.mjs'
 import { Choice } from './Controls'
+import { CompactShots } from './CompactShots'
 import { Inspector } from './Inspector'
 import { Timeline } from './Timeline'
 import { VideoExport } from './VideoExport'
@@ -89,6 +90,7 @@ import {
   download,
 } from '../bridge/platformBridge'
 import { createToolHandlers, useAppAgentTools } from '../hooks/useAppAgentTools'
+import { useCompactInRoom } from '../hooks/useCompactInRoom'
 import { useSceneDocument } from '../hooks/useSceneDocument'
 import type { ResourceOpenEvent } from '@purescience/platform-ui/bridge/types'
 import type { SceneObject } from '../types'
@@ -183,7 +185,10 @@ export function Workspace({
   const [message, setMessage] = useState('')
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const standalone = isStandaloneDevMode()
-  const document = useSceneDocument(store, ready)
+  const compact = useCompactInRoom()
+  const compactRef = useRef(compact)
+  compactRef.current = compact
+  const document = useSceneDocument(store, ready, { held: useCallback(() => compactRef.current, []) })
   const {
     doc,
     open: openScene,
@@ -269,9 +274,12 @@ export function Workspace({
         download(result.data, name, result.mimeType)
       }
     })
+  // A frame this narrow closes the inspector, which is not the whole app's choice: Full app has it open again.
   useEffect(() => {
-    if (window.innerWidth < 1000) store.workspace({ inspector: false })
-  }, [store])
+    if (compact) store.workspace({ playing: false, cameraPreview: false, selectedVertex: null })
+    else if (window.innerWidth >= 1000) store.workspace({ inspector: true })
+    else store.workspace({ inspector: false })
+  }, [store, compact])
   useEffect(() => {
     if (!ready || !doc.path) return
     let cancelled = false
@@ -297,7 +305,7 @@ export function Workspace({
   }, [resource, clearResource, openPath, onError])
   useEffect(() => {
     const hotkey = (event: KeyboardEvent) =>
-      handleWorkspaceHotkey(event, store, viewport.current, run)
+      handleWorkspaceHotkey(event, store, viewport.current, run, compactRef.current)
     window.addEventListener('keydown', hotkey)
     return () => window.removeEventListener('keydown', hotkey)
   }, [run, store])
@@ -310,9 +318,9 @@ export function Workspace({
       } else await createScene()
     })
   useDocumentHotkeys({
-    onSave: () => (standalone ? saveAs() : run(() => saveScene())),
-    onNew: newScene,
-    onOpen: () => (standalone ? open() : setSwitcherOpen(true)),
+    onSave: () => { if (!compact) { if (standalone) saveAs(); else run(() => saveScene()) } },
+    onNew: () => { if (!compact) newScene() },
+    onOpen: () => { if (!compact) { if (standalone) open(); else setSwitcherOpen(true) } },
   })
   const documentAction = async (request: DocumentSwitcherActionRequest) => {
     const { action, item, title, targetDir, suffix } = request
@@ -375,6 +383,7 @@ export function Workspace({
   )
   return (
     <AppFrame
+      {...(compact ? { 'data-compact-room': '' } : undefined)}
       identityAppSlug="3d"
       headerDocumentName={state.scene.title.trim() || doc.path?.replace(/\\/g, '/').split('/').pop()}
       headerActions={
@@ -545,7 +554,7 @@ export function Workspace({
           className="viewport-slot"
           {...withOpen(agentRefs({ path: doc.path }, state.scene.title.trim() || 'Scene'))}
         >
-          <SceneViewport store={store} api={viewport} onError={onError} />
+          <SceneViewport store={store} api={viewport} onError={onError} lookingOnly={compact} />
           {!state.scene.objects.length && (
             <div className="empty-scene">
               <div className="empty-mark">
@@ -582,6 +591,7 @@ export function Workspace({
         {state.inspector && <Inspector store={store} run={run} />}
       </div>
       <Timeline store={store} run={run} />
+      {compact && <CompactShots store={store} viewport={viewport} />}
       <input
         ref={fileInput}
         hidden

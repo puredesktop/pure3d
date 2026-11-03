@@ -15,6 +15,8 @@ export function handleWorkspaceHotkey(
   store: WorkspaceHotkeyStore,
   viewport: { frame(): void } | null,
   run: (action: () => unknown) => void,
+  /** Held in a page there is only looking: framing stays, and nothing a key does can change the scene. */
+  lookingOnly = false,
 ) {
   if (event.target instanceof HTMLElement && event.target.closest('[role="dialog"]')) return
   const editing =
@@ -23,6 +25,10 @@ export function handleWorkspaceHotkey(
   const command = event.ctrlKey || event.metaKey
   if (editing) return
   const current = store.getSnapshot()
+  if (lookingOnly) {
+    if (!command && event.key.toLowerCase() === 'f') viewport?.frame()
+    return
+  }
   if (command && event.key.toLowerCase() === 'z') {
     event.preventDefault()
     run(() => store.history(event.shiftKey ? 'redo' : 'undo'))
