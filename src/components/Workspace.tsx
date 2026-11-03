@@ -281,7 +281,8 @@ export function Workspace({
     else store.workspace({ inspector: false })
   }, [store, compact])
   useEffect(() => {
-    if (!ready || !doc.path) return
+    // A held copy has no tab of its own to name.
+    if (!ready || !doc.path || compact) return
     let cancelled = false
     void updateCurrentWorkspaceTab({
       title: state.scene.title,
@@ -297,7 +298,7 @@ export function Workspace({
     return () => {
       cancelled = true
     }
-  }, [ready, doc.path, state.scene.title, onError])
+  }, [ready, doc.path, state.scene.title, onError, compact])
   useEffect(() => {
     if (resource) {
       void openPath(resource.path).catch(onError).finally(clearResource)
