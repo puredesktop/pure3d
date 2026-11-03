@@ -247,9 +247,10 @@ describe('Scene document integration with the shared lifecycle', () => {
     expect(events.bridge.call).toHaveBeenCalledWith(M.WORKSPACE_CLOSE_READY, [
       { requestId: 'close-3d' },
     ])
+    const closeReady = events.bridge.call.mock.calls.findIndex(([method]) => method === M.WORKSPACE_CLOSE_READY)
     expect(
       documents.autosavePlatformDocument.mock.invocationCallOrder[0],
-    ).toBeLessThan(events.bridge.call.mock.invocationCallOrder[0]!)
+    ).toBeLessThan(events.bridge.call.mock.invocationCallOrder[closeReady]!)
   })
   it('flushes the live camera when closed before its persistence debounce settles', async () => {
     await act(async () => latest.lifecycle.adopt('/Scene.pure3d'))

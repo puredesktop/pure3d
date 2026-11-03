@@ -11,8 +11,26 @@ export {
   savePlatformFolderDialog,
 } from '@purescience/platform-ui/bridge/dialog'
 export { updateCurrentWorkspaceTab } from '@purescience/platform-ui/bridge/workspace'
+import { readPlatformStorageJson, writePlatformStorageJson } from '@purescience/platform-ui/bridge/storage'
+import type { LeasePort } from '../lib/writerLease'
 export { vision } from '@purescience/platform-ui/bridge/assistants/vision/api'
 export type { VisionGenerateRequest } from '@purescience/platform-ui/bridge/assistants/types'
+
+/**
+ * Where copies of the app take turns to save a scene. A scene is a file, and the shell's only conditional write for a
+ * single file is in its JSON store, so a small file there decides whose turn it is (lib/writerLease.ts).
+ */
+const SCENE_WRITER = { appSlug: '3d', fileName: '3d-scene-writer.json' as const }
+export const sceneWriterLease: LeasePort = {
+  read: async () => {
+    const current = await readPlatformStorageJson(SCENE_WRITER)
+    return { value: current?.value ?? null, version: current?.version ?? null }
+  },
+  write: async (value, ifMatch) => {
+    const result = await writePlatformStorageJson({ ...SCENE_WRITER, value, ifMatch })
+    return { ok: result?.ok === true, version: result?.version ?? null }
+  },
+}
 
 export const isStandaloneDevMode = () =>
   import.meta.env.DEV && window.parent === window
