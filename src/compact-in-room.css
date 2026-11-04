@@ -91,3 +91,28 @@ html[data-held-in-room]:has([data-compact-room]) [data-compact-room] {
   background: #ffffff;
   color: #161d27;
 }
+
+/* The held look: one white surface edge to edge, a hairline over the strip of shots, 3px corners, 12px type in sentence case.
+   The scene is the user's own and keeps its colours; only the strip under it is calmed. The :not(#_) is for weight: the
+   White appearance paints this body grey with !important. */
+html[data-held-in-room]:has([data-compact-room]):not(#_) body {
+  background: #ffffff !important;
+}
+[data-compact-room] .compact-shots:not(#_) {
+  border-top: 1px solid #dde1e7;
+  background: #ffffff;
+  --scene-line: #dde1e7;
+}
+[data-compact-room] .compact-shots button:not(#_) {
+  border-radius: 3px;
+  font-size: 12px;
+}
+[data-compact-room] .compact-shots button:hover:not(#_) {
+  background: #f5f6f8;
+}
+[data-compact-room] .compact-shots button[aria-pressed='true']:not(#_) {
+  background: #eef0f3;
+}
+[data-compact-room] .compact-shots-hint:not(#_) {
+  font-size: 12px;
+}
