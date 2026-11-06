@@ -1,3 +1,12 @@
+/* Follows the desk's theme: each colour is light-dark(its light value, its dark partner), the dark ones the held greys
+   of docs/held-apps.md. A light theme leaves the colour scheme as it was; a dark one says dark, and parts that asked
+   for light take --held-scheme instead. */
+[data-compact-room]:is([data-platform-theme='dark'] *),
+html[data-held-in-room]:has([data-compact-room])[data-platform-theme='dark'] {
+  color-scheme: dark;
+  --held-scheme: dark;
+}
+
 /* Compact Pure3D, held in a page (useCompactInRoom). The frame carries data-compact-room only then, and every rule here
    starts from it, so with compact off nothing in this file applies. Chrome is hidden, not removed: everything stays
    mounted, so state stays and the agent's tools keep working. Full app gives it all back. */
@@ -80,38 +89,38 @@
 
 /* Held inside an entry of a room: one flat surface, in the room's light whatever the desk's theme. */
 html[data-held-in-room]:has([data-compact-room]) {
-  color-scheme: light;
-  --scene-line: #dde1e7;
-  --scene-muted: #5d6674;
-  --scene-text: #161d27;
+  color-scheme: var(--held-scheme, light);
+  --scene-line: light-dark(#dde1e7, #3a3a3a);
+  --scene-muted: light-dark(#5d6674, #bdbdbd);
+  --scene-text: light-dark(#161d27, #ededed);
 }
 html[data-held-in-room]:has([data-compact-room]),
 html[data-held-in-room]:has([data-compact-room]) body,
 html[data-held-in-room]:has([data-compact-room]) [data-compact-room] {
-  background: #ffffff;
-  color: #161d27;
+  background: light-dark(#ffffff, #1c1c1c);
+  color: light-dark(#161d27, #ededed);
 }
 
 /* The held look: one white surface edge to edge, a hairline over the strip of shots, 3px corners, 12px type in sentence case.
    The scene is the user's own and keeps its colours; only the strip under it is calmed. The :not(#_) is for weight: the
    White appearance paints this body grey with !important. */
 html[data-held-in-room]:has([data-compact-room]):not(#_) body {
-  background: #ffffff !important;
+  background: light-dark(#ffffff, #1c1c1c) !important;
 }
 [data-compact-room] .compact-shots:not(#_) {
-  border-top: 1px solid #dde1e7;
-  background: #ffffff;
-  --scene-line: #dde1e7;
+  border-top: 1px solid light-dark(#dde1e7, #3a3a3a);
+  background: light-dark(#ffffff, #1c1c1c);
+  --scene-line: light-dark(#dde1e7, #3a3a3a);
 }
 [data-compact-room] .compact-shots button:not(#_) {
   border-radius: 3px;
   font-size: 12px;
 }
 [data-compact-room] .compact-shots button:hover:not(#_) {
-  background: #f5f6f8;
+  background: light-dark(#f5f6f8, #272727);
 }
 [data-compact-room] .compact-shots button[aria-pressed='true']:not(#_) {
-  background: #eef0f3;
+  background: light-dark(#eef0f3, #2c2c2c);
 }
 [data-compact-room] .compact-shots-hint:not(#_) {
   font-size: 12px;
