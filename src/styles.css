@@ -132,7 +132,7 @@ button:focus-visible {
   height: 28px;
   padding: 0 7px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: transparent;
   color: inherit;
   font-size: 12px;
@@ -145,9 +145,10 @@ button:focus-visible {
 [data-chrome='toolbar-select']:hover {
   background: var(--glass-well);
 }
+/* A tool that is on is pressed, not coloured: grey with ink. */
 [data-chrome='toolbar-control'][aria-pressed='true'] {
-  background: var(--glass-well);
-  color: var(--scene-accent);
+  background: var(--n-selected, var(--glass-well));
+  color: var(--platform-colors-text);
 }
 .panel-heading [data-chrome='section-label'],
 .inspector > [data-chrome='section-label'],
@@ -212,7 +213,7 @@ button:focus-visible {
   height: 32px;
   min-height: 32px;
   text-align: left;
-  border-radius: 5px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: transparent;
   color: inherit;
   font-size: 13px;
@@ -228,9 +229,15 @@ button:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.object-row:hover,
-.object-row[aria-current='true'] {
+.object-row:hover {
   background: var(--glass-well);
+}
+/* The selected object: the shared selected look, edge to edge, words ink. */
+.object-row[aria-current='true'] {
+  border-radius: 0;
+  background: var(--p-chosen, var(--glass-well));
+  box-shadow: var(--p-chosen-edge, none);
+  font-weight: 600;
 }
 .outline-empty {
   flex: 1;
@@ -292,7 +299,7 @@ button:focus-visible {
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--scene-line);
-  border-radius: 6px;
+  border-radius: var(--pure-chrome-radius, 3px);
 }
 .empty-scene {
   position: absolute;
@@ -309,7 +316,7 @@ button:focus-visible {
   border: 1px solid var(--glass-edge);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   color: var(--platform-colors-text, #36465b);
 }
 .empty-mark {
@@ -318,7 +325,7 @@ button:focus-visible {
   width: 62px;
   height: 62px;
   border: 1px solid var(--glass-line);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   color: var(--scene-accent);
   margin-bottom: 14px;
   background: var(--glass-well);
@@ -463,7 +470,7 @@ button:focus-visible {
   width: 36px;
   height: 36px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--pure-chrome-radius, 3px);
   border: 1px solid var(--scene-line);
 }
 .texture-fields {
@@ -479,7 +486,7 @@ button:focus-visible {
   margin-top: 8px;
   padding: 7px;
   border: 1px solid var(--scene-line);
-  border-radius: 7px;
+  border-radius: var(--pure-chrome-radius, 3px);
 }
 .texture-library .muted {
   grid-column: 1 / -1;
@@ -490,18 +497,21 @@ button:focus-visible {
   min-width: 0;
   padding: 3px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--pure-chrome-radius, 3px);
   color: var(--scene-muted);
   background: transparent;
   cursor: pointer;
   font: inherit;
   font-size: 9px;
 }
-.texture-library-item:hover,
+.texture-library-item:hover {
+  background: var(--n-hover, transparent);
+}
 .texture-library-item[aria-pressed='true'] {
-  border-color: var(--platform-colors-accent, #5177a7);
+  border-color: transparent;
   color: var(--platform-colors-text, #1c2735);
-  background: color-mix(in srgb, var(--platform-colors-accent, #5177a7) 10%, transparent);
+  background: var(--p-chosen, transparent);
+  box-shadow: var(--p-chosen-edge, none);
 }
 .texture-library-item img {
   display: block;
@@ -558,7 +568,7 @@ button:focus-visible {
 .video-export-settings > * { flex-shrink: 0; }
 .video-export-settings > p { margin: 0; font-size: 13px; }
 .video-export-settings label { display: grid; gap: 6px; font-size: 13px; }
-.video-export-settings select { padding: 8px; border: 1px solid var(--glass-line); border-radius: 4px; background: var(--glass-well); color: inherit; font: inherit; }
+.video-export-settings select { padding: 8px; border: 1px solid var(--glass-line); border-radius: var(--pure-chrome-radius, 3px); background: var(--glass-well); color: inherit; font: inherit; }
 .video-export-settings dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 20px; margin: 0; font-size: 13px; }
 .video-export-settings dd { margin: 0; }
 .video-export-settings progress { width: 100%; }
@@ -588,7 +598,7 @@ button:focus-visible {
 .video-export-history { list-style: none; padding: 0; margin: 0; max-height: 180px; overflow: auto; }
 .video-export-history li { display: flex; border-bottom: 1px solid var(--glass-line); }
 .video-export-history li > button:first-child { flex: 1; min-width: 0; display: grid; gap: 4px; text-align: left; padding: 10px; border: 0; background: transparent; color: inherit; font: inherit; overflow-wrap: anywhere; cursor: pointer; }
-.video-export-history li > button[aria-pressed="true"] { background: var(--glass-well); box-shadow: inset 3px 0 currentColor; }
+.video-export-history li > button[aria-pressed="true"] { background: var(--p-chosen, var(--glass-well)); box-shadow: var(--p-chosen-edge, none); }
 .timeline-tools {
   display: flex;
   align-items: center;
@@ -682,7 +692,7 @@ button:focus-visible {
   padding: 0;
   background: transparent;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--pure-chrome-radius, 3px);
   color: var(--scene-muted);
   z-index: 1;
 }
