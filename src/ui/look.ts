@@ -102,6 +102,11 @@ const ROLES = `
   --pure-chrome-muted: var(--n-faint);
   --pure-chrome-tertiary: var(--n-faint);
   --pure-chrome-radius: 3px;
+  --platform-palette-dropdown-radius: 3px;
+  /* The shared switch is yolo orange when on; here it is the app's own colour, solid, with a light knob. */
+  --pure-chrome-yolo: var(--p-text);
+  --pure-chrome-yolo-fill: var(--p-text);
+  --pure-chrome-yolo-knob: var(--p-on-text);
   --pure-chrome-label-size: 10.5px;
   --pure-chrome-label-tracking: 0.05em;
   --platform-radius-sm: 3px;
