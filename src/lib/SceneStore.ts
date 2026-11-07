@@ -76,7 +76,7 @@ export class SceneStore {
       playing: false,
       loop: true,
       mode: 'translate',
-      inspector: true,
+      inspector: false,
       cameraPreview: false,
       canUndo: false,
       canRedo: false,

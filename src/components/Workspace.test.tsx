@@ -44,6 +44,7 @@ vi.mock('./SceneViewport', () => ({
 
 import { Workspace } from './Workspace'
 import { SceneStore } from '../lib/SceneStore'
+import { makeObject } from '../lib/scene'
 
 let root: Root
 let host: HTMLDivElement
@@ -140,7 +141,7 @@ it('held: the frame is marked, the viewport only looks, and the shots move only 
   expect(store.getContentSnapshot()).toBe(content)
 })
 
-it('let go by the room: the whole app again, in place, with the inspector open and no strip', async () => {
+it('let go by the room: the whole app again, in place, with the side panels closed for the stage and no strip', async () => {
   const before = store.getContentSnapshot()
   Object.defineProperty(window, 'innerWidth', { value: 1400, configurable: true })
   held.compact = true
@@ -151,6 +152,22 @@ it('let go by the room: the whole app again, in place, with the inspector open a
   expect(host.querySelector('[data-compact-room]')).toBeNull()
   expect(host.querySelector('.compact-shots')).toBeNull()
   expect(viewport.props.lookingOnly).toBe(false)
-  expect(store.getSnapshot().inspector).toBe(true)
+  expect(store.getSnapshot().inspector).toBe(false)
+  expect(host.querySelector('.outline')?.hasAttribute('hidden')).toBe(true)
   expect(store.getContentSnapshot()).toBe(before)
+})
+
+it('opens the inspector by itself on the first selection, and the scene objects from their button', async () => {
+  Object.defineProperty(window, 'innerWidth', { value: 1400, configurable: true })
+  held.compact = false
+  await redraw()
+  expect(store.getSnapshot().inspector).toBe(false)
+  const object = makeObject('box')
+  await act(async () => store.edit([{ op: 'add', object }]))
+  await act(async () => store.workspace({ selectedId: object.id }))
+  expect(store.getSnapshot().inspector).toBe(true)
+  const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Scene objects"]')!
+  expect(host.querySelector('.outline')?.hasAttribute('hidden')).toBe(true)
+  await act(async () => toggle.click())
+  expect(host.querySelector('.outline')?.hasAttribute('hidden')).toBe(false)
 })

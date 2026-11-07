@@ -186,6 +186,10 @@ button:focus-visible {
   border-right: 1px solid var(--scene-line);
   min-height: 0;
 }
+/* Scene objects starts closed, so the stage has the room; it stays mounted. */
+.outline[hidden] {
+  display: none;
+}
 .panel-heading {
   display: flex;
   align-items: center;

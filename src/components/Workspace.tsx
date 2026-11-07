@@ -63,6 +63,7 @@ import {
   Shapes,
   Lightbulb,
   Presentation,
+  ListTree,
 } from 'lucide-react'
 import { GENERATORS } from '../lib/generatorSpecs.mjs'
 import { Choice } from './Controls'
@@ -187,6 +188,10 @@ export function Workspace({
   const standalone = isStandaloneDevMode()
   const compact = useCompactInRoom()
   const compactRef = useRef(compact)
+  // Both side panels start closed so the stage has the most room. Scene objects opens from its toolbar button; the
+  // inspector opens from its button, or by itself the first time something is selected unless it was set by hand.
+  const [outlineOpen, setOutlineOpen] = useState(false)
+  const inspectorSetByHand = useRef(false)
   compactRef.current = compact
   const document = useSceneDocument(store, ready, { held: useCallback(() => compactRef.current, []) })
   const {
@@ -274,12 +279,17 @@ export function Workspace({
         download(result.data, name, result.mimeType)
       }
     })
-  // A frame this narrow closes the inspector, which is not the whole app's choice: Full app has it open again.
+  // The inspector starts closed, held or not, so the stage has the room.
   useEffect(() => {
     if (compact) store.workspace({ playing: false, cameraPreview: false, selectedVertex: null })
-    else if (window.innerWidth >= 1000) store.workspace({ inspector: true })
     else store.workspace({ inspector: false })
   }, [store, compact])
+  // The first selection opens the inspector (on a frame wide enough for it), unless it was opened or closed by hand.
+  useEffect(() => {
+    if (!state.selectedId || compact || inspectorSetByHand.current) return
+    inspectorSetByHand.current = true
+    if (window.innerWidth >= 1000) store.workspace({ inspector: true })
+  }, [store, compact, state.selectedId])
   useEffect(() => {
     // A held copy has no tab of its own to name.
     if (!ready || !doc.path || compact) return
@@ -431,6 +441,14 @@ export function Workspace({
         </span>
       </div>
       <EditorToolbar className="scene-toolbar">
+        <ToolbarControl
+          aria-label="Scene objects"
+          title={outlineOpen ? 'Hide the scene objects' : 'Show the scene objects'}
+          aria-pressed={outlineOpen}
+          onClick={() => setOutlineOpen(open => !open)}
+        >
+          <ListTree size={15} />
+        </ToolbarControl>
         <Choice
           label="Add object"
           options={SHAPES.map(value => ({
@@ -511,7 +529,10 @@ export function Workspace({
         <ToolbarControl
           aria-label="Toggle inspector"
           aria-pressed={state.inspector}
-          onClick={() => store.workspace({ inspector: !state.inspector })}
+          onClick={() => {
+            inspectorSetByHand.current = true
+            store.workspace({ inspector: !state.inspector })
+          }}
         >
           <SlidersHorizontal size={15} />
         </ToolbarControl>
@@ -530,7 +551,7 @@ export function Workspace({
         </div>
       )}
       <div className="scene-body">
-        <aside className="outline">
+        <aside className="outline" hidden={!outlineOpen}>
           <div className="panel-heading">
             <SidebarSectionLabel>Scene objects</SidebarSectionLabel>
             <span className="muted">{state.scene.objects.length}</span>
