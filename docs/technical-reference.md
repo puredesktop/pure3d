@@ -109,6 +109,19 @@ one-line note. Replies never change the document format or bridge calls.
 
 Runtime schemas in `src/lib/schemas.mjs` and `plugin.json` describe the same tools; keep their descriptions and input schemas aligned.
 
+## Model
+
+Pure3D asks for the 3D model rather than naming one. Once the bridge is ready it
+makes `role:3d` (`THREE_D_MODEL` from `@purescience/platform-ui/bridge/modelRoles.mjs`)
+its default model, through `preferModelRole('3d', '3d')`: only while nobody has
+chosen a model for Pure3D, only once, and only on a desktop that knows model
+roles. The host turns `role:3d` into the model chosen in Settings › Models › 3D
+(or by the organisation on a managed desktop), and into the default model while
+none is chosen, so nothing changes until someone chooses one. Agents working in
+Pure3D from the chat run on their own model; a conversation can be put on the
+3D model from its model menu. PureCloud's organisation policy decides models
+there, so the call changes nothing on PureCloud.
+
 ## Formats and current limits
 
 Import OBJ, STL and self-contained static GLB geometry, including GLB hierarchy

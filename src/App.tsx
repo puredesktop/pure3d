@@ -4,12 +4,14 @@ import { usePlatformBridge } from '@purescience/platform-ui/bridge/react/usePlat
 import { usePlatformViewportResource } from '@purescience/platform-ui/bridge/react/usePlatformViewportResource'
 import { isStandaloneDevMode } from './bridge/platformBridge'
 import { useAppBoot } from './hooks/useAppBoot'
+import { useThreeDModel } from './hooks/useThreeDModel'
 import { Workspace } from './components/Workspace'
 
 export function App() {
   const { ready, error, meta } = usePlatformBridge()
   const { store, error: bootError } = useAppBoot(ready || isStandaloneDevMode())
   const { resource, clearResource } = usePlatformViewportResource(ready, meta)
+  useThreeDModel(ready, isStandaloneDevMode())
   if (error && !isStandaloneDevMode())
     return (
       <AppFrame identityAppSlug="3d">

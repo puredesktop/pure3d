@@ -15,6 +15,8 @@ import { readPlatformStorageJson, writePlatformStorageJson } from '@purescience/
 import type { LeasePort } from '../lib/writerLease'
 export { vision } from '@purescience/platform-ui/bridge/assistants/vision/api'
 export type { VisionGenerateRequest } from '@purescience/platform-ui/bridge/assistants/types'
+// The 3D model (Settings › Models › 3D): Pure3D's default model is the role, so the host picks the model.
+export { preferModelRole, THREE_D_MODEL } from '@purescience/platform-ui/bridge/modelRoles.mjs'
 
 /**
  * Where copies of the app take turns to save a scene. A scene is a file, and the shell's only conditional write for a
