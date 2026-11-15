@@ -441,7 +441,7 @@ export const toolDefinitions = {
         editExisting: z.boolean().optional(),
       })
       .strict(),
-    'external',
+    'write',
   ),
   applyTexture: tool(
     'Apply a retained texture-library asset by assetId to explicit object IDs. Set recursive:true to create a local binding on every object in each target subtree; otherwise a group binding is inherited by children unless a child already has its own texture override. All asset and target IDs are validated before the scene changes. Referenced texture bindings preserve each target\'s existing UV settings and textured meshes without UVs receive box-projected UVs. Returns appliedObjectIds and a change summary.',
