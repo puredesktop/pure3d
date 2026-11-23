@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
-import { createToolHandlers } from './useAppAgentTools'
+import { createAtomicToolHandlers } from './useAppAgentTools'
 import { SceneStore } from '../lib/SceneStore'
 import { emptyScene, makeObject } from '../lib/scene'
 import type { ViewportAPI } from '../components/SceneViewport'
@@ -90,7 +90,7 @@ function setup() {
       aspect: vi.fn(() => 16 / 9),
     } as ViewportAPI | null,
   }
-  const handlers = createToolHandlers(store, document, viewport)
+  const handlers = createAtomicToolHandlers(store, document, viewport)
   const call = async (name: keyof typeof handlers, args: Record<string, unknown> = {}) => {
     const reply = await handlers[name]({ shortName: name, toolCallId: 't', arguments: args })
     return { reply, size: reply.content.length, json: JSON.parse(reply.content) }

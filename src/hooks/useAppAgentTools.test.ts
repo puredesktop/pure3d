@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createToolHandlers } from './useAppAgentTools'
+import { PURE3D_ATOMIC_TOOL_SCHEMAS } from '../agents/atomicToolSchemas'
 import { SceneStore } from '../lib/SceneStore'
 import { makeObject, emptyScene } from '../lib/scene'
 import type { ViewportAPI } from '../components/SceneViewport'
@@ -30,8 +31,20 @@ describe('Assistant surface', () => {
     }
     const viewport = { current: null as ViewportAPI | null }
     const handlers = createToolHandlers(store, document, viewport)
-    const invoke = (name: keyof typeof handlers, args = {}) =>
-      handlers[name]({ shortName: name, toolCallId: 'test', arguments: args })
+    const invoke = (name: string, args: Record<string, unknown> = {}) => {
+      if (name in handlers) {
+        return handlers[name as keyof typeof handlers]({
+          shortName: name,
+          toolCallId: 'test',
+          arguments: args,
+        })
+      }
+      return handlers.callExtendedTool({
+        shortName: 'callExtendedTool',
+        toolCallId: 'test',
+        arguments: { tool: name, arguments: args },
+      })
+    }
     return { store, document, viewport, handlers, invoke }
   }
   const mockImageDecoder = () =>
@@ -122,7 +135,7 @@ describe('Assistant surface', () => {
     expect(state.scene.keyframes).toEqual(before.keyframes)
     expect(document.save.mock.calls.length).toBe(saves)
     expect(JSON.stringify(manifest.app.agents.tools.find(t => t.name === 'setWorkspace')?.inputSchema)).toContain('cameraPreview')
-    expect(JSON.stringify(manifest.app.agents.tools.find(t => t.name === 'editScene')?.inputSchema)).toContain('cameraKeyframe')
+    expect(JSON.stringify(PURE3D_ATOMIC_TOOL_SCHEMAS.find(t => t.name === 'editScene')?.inputSchema)).toContain('cameraKeyframe')
   })
   it('opens and creates documents through the same workflow and reports the resulting binding', async () => {
     const { store, document, invoke } = setup()
@@ -403,11 +416,23 @@ describe('Assistant surface', () => {
       }),
     ).rejects.toThrow('resource is opening')
     await expect(
-      handlers.editScene({
-        shortName: 'editScene',
+      handlers.callExtendedTool({
+        shortName: 'callExtendedTool',
         toolCallId: 'pending',
         arguments: {
-          operations: [{ op: 'add', object: makeObject() }],
+          tool: 'editScene',
+          arguments: {
+            operations: [{ op: 'add', object: makeObject() }],
+          },
+        },
+      }),
+    ).rejects.toThrow('resource is opening')
+    await expect(
+      handlers.fn_composeScene({
+        shortName: 'fn_composeScene',
+        toolCallId: 'pending-fn',
+        arguments: {
+          add: [{ kind: 'box' }],
         },
       }),
     ).rejects.toThrow('resource is opening')
