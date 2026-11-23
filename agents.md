@@ -1,10 +1,23 @@
 # Pure3D assistant guide
 
-Tools operate directly on the active 3D workspace. Use `3d.getScene` to inspect
-content and find object IDs. Edits need only their operations or object IDs;
-consecutive edits do not require rereading the scene. Objects use
-unit-size primitive geometry or generated shapes, meter positions, XYZ Euler
-rotations in radians, and positive scales. Keyframe times are seconds.
+Tools operate directly on the active 3D workspace. Use `3d.fn_inspectSceneHealth`
+or `3d.getScene` to inspect content and find object IDs. Edits need only their
+operations or object IDs; consecutive edits do not require rereading the scene.
+Objects use unit-size primitive geometry or generated shapes, meter positions,
+XYZ Euler rotations in radians, and positive scales. Keyframe times are seconds.
+
+## Tool tiers: prefer composite functions first
+
+Pure3D exposes a focused 3-tier tool surface:
+
+1. **Composite App Functions (`fn_*`, always exposed)** — prefer these for multi-step 3D workflows (1 call instead of 3–10 round-trips):
+   - `fn_inspectSceneHealth` — read-only scene health/structure audit (counts, lighting/look summary, warnings for grid/unlit night/plain materials/broken scatter refs/orphaned textures) plus on-demand catalogs of generators, CC0 kit models, material presets, and procedural surfaces (`includeCatalog`).
+   - `fn_composeScene` — create or update a multi-object composition atomically (optionally starting from a clean scene with `resetScene: true`), with ergonomic shorthand transforms/materials for primitives, procedural generators, and kit models, settings/look updates, optional hero camera framing, and autosave.
+   - `fn_setupLightingAndLook` — configure curated atmosphere presets (`golden-hour`, `studio-product`, `moonlit-night`, `overcast-day`, `dramatic-dusk`, `clean-daylight`), custom `settings.look` overrides, optional studio cyclorama + 3-point area-light rig (`addStudioRig: true`), explicit point/spot/area lights, grid toggle, and optional framing in one save.
+   - `fn_styleMaterialsAndTextures` — batch-apply material presets, procedural surfaces, PBR overrides, retained texture assets, UV/tint patches, and/or one AI-generated texture across explicit IDs, kinds, or name matches in one save.
+   - `fn_directCameraAndShots` — frame and save a `heroShot`, author smooth multi-keyframe camera orbits or custom shot sequences (auto-extending `duration`), check `blockedBy` occluders, toggle `cameraPreview` playback, and optionally capture up to 4 preview verification PNGs in one call.
+2. **Core atomic tools (always exposed)**: `getScene`, `setWorkspace`, `captureViewport`, `history`.
+3. **Extended specialist tools (10 tools, on-demand)**: call `discoverAppTools` to search or inspect full schemas for raw `editScene` (low-level mesh/vertex/subdivide/unwrap/keyframe batch edits), `newScene`, `openScene`, `saveScene`, `importModel`, `exportModel`, `importTexture`, `generateTexture`, `applyTexture`, and `patchTextures`, then invoke them via `callExtendedTool`.
 
 ## Making it look good
 
