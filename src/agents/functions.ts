@@ -11,6 +11,7 @@ import { KIT } from '../lib/kit.mjs'
 import { resolveLook } from '../lib/look'
 import { MATERIAL_PRESETS } from '../lib/materialPresets.mjs'
 import {
+  applyOperations,
   descendants,
   emptyScene,
   identityTransform,
@@ -23,6 +24,7 @@ import {
   materialSchema,
   shapeSchema,
   shotSchema,
+  toolDefinitions,
   vectorSchema,
 } from '../lib/schemas.mjs'
 import { SURFACES } from '../lib/surfaceSpecs.mjs'
@@ -260,6 +262,24 @@ const LOOK_PRESET_CONFIGS: Record<
     grid: false,
   },
 }
+
+const CATALOG_SECTIONS = [
+  'none',
+  'generators',
+  'kit',
+  'materials',
+  'surfaces',
+  'all',
+] as const
+
+const TEXTURE_GENERATION_SIZES = [
+  'auto',
+  '1024x1024',
+  '1536x1024',
+  '1024x1536',
+] as const
+
+const texturePatchSchema = toolDefinitions.patchTextures.schema.shape.patch
 
 const SHOT_SCHEMA_JSON: Record<string, unknown> = {
   type: 'object',
@@ -666,6 +686,13 @@ export const fnInspectSceneHealth = defineAppFunction<Pure3DAgentContext>({
     }
 
     const catalogMode = asString(args.includeCatalog) ?? 'none'
+    if (
+      !(CATALOG_SECTIONS as readonly string[]).includes(catalogMode)
+    ) {
+      throw new SceneToolError(
+        `Unknown includeCatalog value "${catalogMode}". Use one of ${CATALOG_SECTIONS.join(', ')}.`,
+      )
+    }
     const catalog =
       catalogMode !== 'none' ? buildCatalog(catalogMode) : undefined
 
@@ -832,19 +859,57 @@ export const fnComposeScene = defineAppFunction<Pure3DAgentContext>({
         operations.push({ op: 'clearMaterialOverride', id })
       }
       const patch: Record<string, unknown> = {}
-      if (rawUpdate.name !== undefined) patch.name = asString(rawUpdate.name)
-      if (rawUpdate.parentId !== undefined) patch.parentId = rawUpdate.parentId
+      if (rawUpdate.name !== undefined) {
+        const nextName = asString(rawUpdate.name)
+        if (!nextName) {
+          throw new SceneToolError(
+            `updates[${id}].name must be a non-empty string.`,
+          )
+        }
+        patch.name = nextName
+      }
+      if (rawUpdate.parentId !== undefined) {
+        if (rawUpdate.parentId === null) {
+          patch.parentId = null
+        } else {
+          const nextParentId = asString(rawUpdate.parentId)
+          if (!nextParentId) {
+            throw new SceneToolError(
+              `updates[${id}].parentId must be null or a non-empty string.`,
+            )
+          }
+          patch.parentId = nextParentId
+        }
+      }
       if (typeof rawUpdate.visible === 'boolean') patch.visible = rawUpdate.visible
 
+      const transformRaw = isPlainObject(rawUpdate.transform)
+        ? rawUpdate.transform
+        : {}
       const transformPatch: Record<string, unknown> = {}
       if (rawUpdate.position !== undefined) {
         transformPatch.position = asVec3(rawUpdate.position, `updates[${id}].position`)
+      } else if (transformRaw.position !== undefined) {
+        transformPatch.position = asVec3(
+          transformRaw.position,
+          `updates[${id}].transform.position`,
+        )
       }
       if (rawUpdate.rotation !== undefined) {
         transformPatch.rotation = asVec3(rawUpdate.rotation, `updates[${id}].rotation`)
+      } else if (transformRaw.rotation !== undefined) {
+        transformPatch.rotation = asVec3(
+          transformRaw.rotation,
+          `updates[${id}].transform.rotation`,
+        )
       }
       if (rawUpdate.scale !== undefined) {
         transformPatch.scale = asPositiveVec3(rawUpdate.scale, `updates[${id}].scale`)
+      } else if (transformRaw.scale !== undefined) {
+        transformPatch.scale = asPositiveVec3(
+          transformRaw.scale,
+          `updates[${id}].transform.scale`,
+        )
       }
       if (Object.keys(transformPatch).length > 0) {
         patch.transform = transformPatch
@@ -864,7 +929,7 @@ export const fnComposeScene = defineAppFunction<Pure3DAgentContext>({
       operations.push({ op: 'delete', id })
     }
 
-    if (title || settingsRaw) {
+    if ((title && !resetScene) || settingsRaw) {
       const settingsPatch: Record<string, unknown> = {}
       if (settingsRaw) {
         if (settingsRaw.duration !== undefined) {
@@ -887,25 +952,45 @@ export const fnComposeScene = defineAppFunction<Pure3DAgentContext>({
           settingsPatch.look = lookSchema.parse(settingsRaw.look)
         }
       }
-      operations.push({
-        op: 'settings',
-        ...(title ? { title } : {}),
-        ...(Object.keys(settingsPatch).length > 0 ? { settings: settingsPatch } : {}),
-      } as Operation)
+      if ((title && !resetScene) || Object.keys(settingsPatch).length > 0) {
+        operations.push({
+          op: 'settings',
+          ...(title && !resetScene ? { title } : {}),
+          ...(Object.keys(settingsPatch).length > 0 ? { settings: settingsPatch } : {}),
+        } as Operation)
+      }
     }
 
     const before = ctx.store.getSnapshot().scene
+    const baseScene = resetScene ? emptyScene(title ?? 'Untitled scene') : before
+    // Validate atomically before touching the store so a failed resetScene never wipes the active scene.
+    const previewScene =
+      operations.length > 0 ? applyOperations(baseScene, operations) : baseScene
+
+    let resolvedSelectId: string | null | undefined
+    if (args.selectId !== undefined) {
+      if (args.selectId === null) {
+        resolvedSelectId = null
+      } else {
+        const nextSelectId = asString(args.selectId)
+        if (!nextSelectId) {
+          throw new SceneToolError('selectId must be null or a non-empty string.')
+        }
+        if (!previewScene.objects.some(o => o.id === nextSelectId)) {
+          throw new SceneToolError(`Unknown selected object "${nextSelectId}".`)
+        }
+        resolvedSelectId = nextSelectId
+      }
+    }
+
     if (resetScene) {
-      ctx.store.replace(emptyScene(title ?? 'Untitled scene'))
+      ctx.store.replace(baseScene)
     }
     if (operations.length > 0) {
       ctx.store.edit(operations)
     }
-    if (args.selectId !== undefined) {
-      ctx.store.workspace({
-        selectedId:
-          args.selectId === null ? null : (asString(args.selectId) ?? null),
-      })
+    if (resolvedSelectId !== undefined) {
+      ctx.store.workspace({ selectedId: resolvedSelectId })
     }
 
     let cameraResult: Record<string, unknown> | undefined
@@ -922,6 +1007,15 @@ export const fnComposeScene = defineAppFunction<Pure3DAgentContext>({
           ...cameraReply(camera),
           ...(blockedBy ? { blockedBy } : {}),
         }
+      } else if (shotRaw.position && shotRaw.target) {
+        const camera = {
+          position: shotRaw.position,
+          target: shotRaw.target,
+          fov: shotRaw.fov ?? 45,
+        }
+        ctx.store.setCamera(camera)
+        ctx.store.persistCamera()
+        cameraResult = cameraReply(camera)
       } else {
         cameraSkippedReason = 'Viewport renderer unavailable; camera shot skipped.'
       }
@@ -1058,7 +1152,9 @@ export const fnSetupLightingAndLook = defineAppFunction<Pure3DAgentContext>({
     }
 
     const before = ctx.store.getSnapshot().scene
-    const existingById = new Map(before.objects.map(o => [o.id, o]))
+    const plannedKinds = new Map<string, string>(
+      before.objects.map(o => [o.id, o.kind]),
+    )
     const operations: Operation[] = []
     const touchedLightIds: string[] = []
     let backdropId: string | undefined
@@ -1070,7 +1166,13 @@ export const fnSetupLightingAndLook = defineAppFunction<Pure3DAgentContext>({
       position: Vec3,
       params: Record<string, number | string>,
     ) => {
-      if (existingById.has(id)) {
+      const existingKind = plannedKinds.get(id)
+      if (existingKind !== undefined) {
+        if (existingKind !== kind) {
+          throw new SceneToolError(
+            `Cannot upsert ${kind} "${id}": an existing object of kind "${existingKind}" already uses that ID.`,
+          )
+        }
         operations.push({
           op: 'update',
           id,
@@ -1081,6 +1183,7 @@ export const fnSetupLightingAndLook = defineAppFunction<Pure3DAgentContext>({
           },
         } as Operation)
       } else {
+        plannedKinds.set(id, kind)
         operations.push({
           op: 'add',
           object: {
@@ -1247,33 +1350,64 @@ export const fnSetupLightingAndLook = defineAppFunction<Pure3DAgentContext>({
     }
 
     let cameraResult: Record<string, unknown> | undefined
-    if (shotRaw && ctx.viewport.current) {
-      const { blockedBy, ...camera } = ctx.viewport.current.shot(
-        shotRaw,
-        ctx.viewport.current.aspect(),
-      )
-      ctx.store.setCamera(camera)
-      ctx.store.persistCamera()
-      cameraResult = {
-        ...cameraReply(camera),
-        ...(blockedBy ? { blockedBy } : {}),
+    let cameraSkippedReason: string | undefined
+    if (shotRaw) {
+      if (ctx.viewport.current) {
+        const { blockedBy, ...camera } = ctx.viewport.current.shot(
+          shotRaw,
+          ctx.viewport.current.aspect(),
+        )
+        ctx.store.setCamera(camera)
+        ctx.store.persistCamera()
+        cameraResult = {
+          ...cameraReply(camera),
+          ...(blockedBy ? { blockedBy } : {}),
+        }
+      } else if (shotRaw.position && shotRaw.target) {
+        const camera = {
+          position: shotRaw.position,
+          target: shotRaw.target,
+          fov: shotRaw.fov ?? 45,
+        }
+        ctx.store.setCamera(camera)
+        ctx.store.persistCamera()
+        cameraResult = cameraReply(camera)
+      } else {
+        cameraSkippedReason = 'Viewport renderer unavailable; camera shot skipped.'
       }
     }
 
+    const didMutate = operations.length > 0 || Boolean(cameraResult)
     const resolvedLook = resolveLook(ctx.store.getSnapshot().scene)
-    const committed = await commitAndSummarize(ctx, before, {
-      ...(presetName ? { preset: presetName } : {}),
-      look: resolvedLook,
-      grid: ctx.store.getSnapshot().scene.settings.grid,
-      ...(backdropId ? { backdropId } : {}),
-      ...(touchedLightIds.length ? { lightIds: touchedLightIds } : {}),
-      ...(cameraResult ? { camera: cameraResult } : {}),
-    })
+    const uniqueLightIds = [...new Set(touchedLightIds)]
+    const data = didMutate
+      ? await commitAndSummarize(ctx, before, {
+          ...(presetName ? { preset: presetName } : {}),
+          look: resolvedLook,
+          grid: ctx.store.getSnapshot().scene.settings.grid,
+          ...(backdropId ? { backdropId } : {}),
+          ...(uniqueLightIds.length ? { lightIds: uniqueLightIds } : {}),
+          ...(cameraResult ? { camera: cameraResult } : {}),
+          ...(cameraSkippedReason ? { cameraNote: cameraSkippedReason } : {}),
+        })
+      : {
+          ok: true as const,
+          path: ctx.document.doc.path,
+          scene: sceneHeader(ctx.store.getSnapshot().scene),
+          ...(presetName ? { preset: presetName } : {}),
+          look: resolvedLook,
+          grid: ctx.store.getSnapshot().scene.settings.grid,
+          ...(cameraSkippedReason ? { cameraNote: cameraSkippedReason } : {}),
+          changes: {},
+          note: 'No scene content changed',
+          canUndo: ctx.store.getSnapshot().canUndo,
+          canRedo: ctx.store.getSnapshot().canRedo,
+        }
 
     return {
-      mutated: true,
-      summary: `Configured lighting & look${presetName ? ` (${presetName})` : ''}${touchedLightIds.length ? ` with ${touchedLightIds.length} light(s)` : ''}.`,
-      data: committed,
+      mutated: didMutate,
+      summary: `Configured lighting & look${presetName ? ` (${presetName})` : ''}${uniqueLightIds.length ? ` with ${uniqueLightIds.length} light(s)` : ''}.`,
+      data,
     }
   },
 })
@@ -1328,14 +1462,15 @@ export const fnStyleMaterialsAndTextures =
       const styledIds = new Set<string>()
       let generatedInfo: Record<string, unknown> | undefined
 
-      // Validate assignments up front before mutating or spending an image generation call.
+      // Validate all assignments and generateTexture up front before mutating or spending an image generation call.
       const scene = ctx.store.getSnapshot().scene
+      const knownIds = new Set(scene.objects.map(o => o.id))
       const planned: Array<{
         targets: SceneObject[]
         clearOverride: boolean
         material?: Record<string, unknown>
         textureAssetId?: string
-        texturePatch?: Record<string, unknown>
+        texturePatch?: Parameters<typeof patchTextureReferences>[1]['patch']
         recursive: boolean
       }> = []
 
@@ -1371,9 +1506,10 @@ export const fnStyleMaterialsAndTextures =
         ) {
           throw new SceneToolError(`Unknown texture asset "${textureAssetId}".`)
         }
-        const texturePatch = isPlainObject(raw.texturePatch)
-          ? raw.texturePatch
-          : undefined
+        const texturePatch =
+          raw.texturePatch !== undefined
+            ? texturePatchSchema.parse(raw.texturePatch)
+            : undefined
         if (
           !raw.clearOverride &&
           !material &&
@@ -1394,52 +1530,77 @@ export const fnStyleMaterialsAndTextures =
         })
       }
 
-      // 1. Apply deterministic material operations in one atomic batch
-      const materialOps: Operation[] = []
+      // Build and dry-run all deterministic operations atomically before touching the store.
+      const deterministicOps: Operation[] = []
+      let previewScene = scene
       for (const plan of planned) {
+        const planOps: Operation[] = []
         for (const target of plan.targets) {
           if (plan.clearOverride) {
-            materialOps.push({ op: 'clearMaterialOverride', id: target.id })
-            styledIds.add(target.id)
+            planOps.push({ op: 'clearMaterialOverride', id: target.id })
           }
           if (plan.material) {
-            materialOps.push({
+            planOps.push({
               op: 'update',
               id: target.id,
               patch: { material: plan.material },
             } as Operation)
-            styledIds.add(target.id)
+          }
+          if (plan.textureAssetId) {
+            planOps.push({
+              op: 'update',
+              id: target.id,
+              patch: { material: { texture: { assetId: plan.textureAssetId } } },
+            } as Operation)
           }
         }
-      }
-      if (materialOps.length > 0) {
-        ctx.store.edit(materialOps)
-      }
-
-      // 2. Apply retained texture bindings & UV patches
-      for (const plan of planned) {
-        const ids = plan.targets.map(t => t.id)
-        if (plan.textureAssetId) {
-          const applied = applyTextureReference(ctx.store, {
-            assetId: plan.textureAssetId,
-            objectIds: ids,
-            recursive: false, // targets already expanded when plan.recursive was true
-          })
-          for (const id of applied) styledIds.add(id)
+        if (planOps.length > 0) {
+          previewScene = applyOperations(previewScene, planOps)
+          deterministicOps.push(...planOps)
         }
         if (plan.texturePatch) {
-          const patched = patchTextureReferences(ctx.store, {
-            objectIds: ids,
-            recursive: false,
-            patch: plan.texturePatch as Parameters<
-              typeof patchTextureReferences
-            >[1]['patch'],
-          })
-          for (const id of patched) styledIds.add(id)
+          const { color, ...binding } = plan.texturePatch
+          const updatesTexture = Object.keys(binding).length > 0
+          if (updatesTexture) {
+            for (const target of plan.targets) {
+              const currentObj = previewScene.objects.find(o => o.id === target.id)
+              if (!currentObj || !resolveMaterial(previewScene, currentObj).texture) {
+                throw new SceneToolError(
+                  `Object has no resolved texture: ${target.id}`,
+                )
+              }
+            }
+          }
+          const patchOps: Operation[] = plan.targets.map(
+            target =>
+              ({
+                op: 'update',
+                id: target.id,
+                patch: {
+                  material: {
+                    ...(color === undefined ? {} : { color }),
+                    ...(updatesTexture ? { texture: binding } : {}),
+                  },
+                },
+              }) as Operation,
+          )
+          previewScene = applyOperations(previewScene, patchOps)
+          deterministicOps.push(...patchOps)
         }
       }
 
-      // 3. Optional single AI texture generation + optional multi-object sharing/patching
+      // Validate generateTexture specification up front before any store mutation or paid API call.
+      let validatedGen:
+        | {
+            objectId: string
+            prompt: string
+            size: (typeof TEXTURE_GENERATION_SIZES)[number]
+            editExisting: boolean
+            extraTargets: string[]
+            recursive: boolean
+            texturePatch?: Parameters<typeof patchTextureReferences>[1]['patch']
+          }
+        | undefined
       if (genSpec) {
         const objectId = asString(genSpec.objectId)
         const prompt = asString(genSpec.prompt)
@@ -1448,40 +1609,95 @@ export const fnStyleMaterialsAndTextures =
             'generateTexture requires non-empty objectId and prompt.',
           )
         }
-        const size = asString(genSpec.size) as
-          | 'auto'
-          | '1024x1024'
-          | '1536x1024'
-          | '1024x1536'
-          | undefined
-        const generated = await generateObjectTexture(ctx.store, objectId, {
-          prompt,
-          size: size ?? '1024x1024',
-          editExisting: genSpec.editExisting === true,
-        })
-        styledIds.add(objectId)
-
-        const extraTargets = Array.isArray(genSpec.applyToObjectIds)
-          ? genSpec.applyToObjectIds.filter(
-              (id): id is string => typeof id === 'string' && id !== objectId,
+        const primaryObj = previewScene.objects.find(o => o.id === objectId)
+        if (!primaryObj) {
+          throw new SceneToolError(`Unknown object ID "${objectId}".`)
+        }
+        const editExisting = genSpec.editExisting === true
+        if (editExisting && !resolveMaterial(previewScene, primaryObj).texture) {
+          throw new SceneToolError('The object has no texture to edit.')
+        }
+        let size: (typeof TEXTURE_GENERATION_SIZES)[number] = '1024x1024'
+        if (genSpec.size !== undefined) {
+          const rawSize = asString(genSpec.size)
+          if (
+            !rawSize ||
+            !(TEXTURE_GENERATION_SIZES as readonly string[]).includes(rawSize)
+          ) {
+            throw new SceneToolError(
+              `generateTexture.size must be one of ${TEXTURE_GENERATION_SIZES.join(', ')}.`,
             )
+          }
+          size = rawSize as (typeof TEXTURE_GENERATION_SIZES)[number]
+        }
+        const extraTargets = Array.isArray(genSpec.applyToObjectIds)
+          ? [
+              ...new Set(
+                genSpec.applyToObjectIds
+                  .filter((id): id is string => typeof id === 'string')
+                  .map(id => id.trim())
+                  .filter(id => id.length > 0 && id !== objectId),
+              ),
+            ]
           : []
-        if (extraTargets.length > 0) {
+        for (const extraId of extraTargets) {
+          if (!knownIds.has(extraId)) {
+            throw new SceneToolError(`Unknown object ID "${extraId}".`)
+          }
+        }
+        const genTexturePatch =
+          genSpec.texturePatch !== undefined
+            ? texturePatchSchema.parse(genSpec.texturePatch)
+            : undefined
+        validatedGen = {
+          objectId,
+          prompt,
+          size,
+          editExisting,
+          extraTargets,
+          recursive: genSpec.recursive === true,
+          texturePatch: genTexturePatch,
+        }
+      }
+
+      // 1. Apply all validated deterministic material & texture edits in one atomic undoable batch.
+      if (deterministicOps.length > 0) {
+        ctx.store.edit(deterministicOps)
+        for (const plan of planned) {
+          for (const target of plan.targets) styledIds.add(target.id)
+        }
+      }
+
+      // 2. Optional single AI texture generation + optional multi-object sharing/patching
+      if (validatedGen) {
+        const generated = await generateObjectTexture(
+          ctx.store,
+          validatedGen.objectId,
+          {
+            prompt: validatedGen.prompt,
+            size: validatedGen.size,
+            editExisting: validatedGen.editExisting,
+          },
+        )
+        styledIds.add(validatedGen.objectId)
+
+        if (validatedGen.extraTargets.length > 0) {
           const applied = applyTextureReference(ctx.store, {
             assetId: generated.assetId,
-            objectIds: extraTargets,
-            recursive: genSpec.recursive === true,
+            objectIds: validatedGen.extraTargets,
+            recursive: validatedGen.recursive,
           })
           for (const id of applied) styledIds.add(id)
         }
-        if (isPlainObject(genSpec.texturePatch)) {
-          const patchTargets = [objectId, ...extraTargets]
+        if (validatedGen.texturePatch) {
+          const patchTargets = [
+            validatedGen.objectId,
+            ...validatedGen.extraTargets,
+          ]
           const patched = patchTextureReferences(ctx.store, {
             objectIds: patchTargets,
-            recursive: genSpec.recursive === true,
-            patch: genSpec.texturePatch as Parameters<
-              typeof patchTextureReferences
-            >[1]['patch'],
+            recursive: validatedGen.recursive,
+            patch: validatedGen.texturePatch,
           })
           for (const id of patched) styledIds.add(id)
         }
@@ -1615,6 +1831,33 @@ export const fnDirectCameraAndShots = defineAppFunction<Pure3DAgentContext>({
       )
     }
 
+    const explicitDuration =
+      args.duration !== undefined
+        ? asFiniteNumber(args.duration, 'duration', 0.1, 3600)
+        : undefined
+    const validatedTime =
+      args.time !== undefined
+        ? asFiniteNumber(args.time, 'time', 0)
+        : undefined
+    let validatedAspect: (typeof ASPECTS)[number] | undefined
+    if (args.aspect !== undefined) {
+      const rawAspect = asString(args.aspect)
+      if (!rawAspect || !(ASPECTS as readonly string[]).includes(rawAspect)) {
+        throw new SceneToolError(
+          `aspect must be one of ${ASPECTS.join(', ')}.`,
+        )
+      }
+      validatedAspect = rawAspect as (typeof ASPECTS)[number]
+    }
+    let validatedSize: number | undefined
+    if (args.size !== undefined) {
+      const s = asFiniteNumber(args.size, 'size', 256, 2048)
+      if (!Number.isInteger(s)) {
+        throw new SceneToolError('size must be an integer between 256 and 2048.')
+      }
+      validatedSize = s
+    }
+
     const before = ctx.store.getSnapshot().scene
     const operations: Operation[] = []
     const authoredKeys: Array<{
@@ -1649,7 +1892,7 @@ export const fnDirectCameraAndShots = defineAppFunction<Pure3DAgentContext>({
       const endTime =
         orbitRaw.endTime !== undefined
           ? asFiniteNumber(orbitRaw.endTime, 'orbit.endTime', 0, 3600)
-          : before.settings.duration
+          : (explicitDuration ?? before.settings.duration)
       if (endTime <= startTime) {
         throw new SceneToolError('orbit.endTime must be greater than orbit.startTime.')
       }
@@ -1722,10 +1965,6 @@ export const fnDirectCameraAndShots = defineAppFunction<Pure3DAgentContext>({
     }
 
     const maxKeyTime = authoredKeys.reduce((m, k) => Math.max(m, k.time), 0)
-    const explicitDuration =
-      args.duration !== undefined
-        ? asFiniteNumber(args.duration, 'duration', 0.1, 3600)
-        : undefined
     const targetDuration = Math.max(
       before.settings.duration,
       explicitDuration ?? 0,
@@ -1785,8 +2024,8 @@ export const fnDirectCameraAndShots = defineAppFunction<Pure3DAgentContext>({
     if (typeof args.playing === 'boolean') {
       workspacePatch.playing = args.playing
     }
-    if (args.time !== undefined) {
-      workspacePatch.time = asFiniteNumber(args.time, 'time', 0)
+    if (validatedTime !== undefined) {
+      workspacePatch.time = validatedTime
     }
     if (Object.keys(workspacePatch).length > 0) {
       ctx.store.workspace(workspacePatch)
@@ -1804,16 +2043,8 @@ export const fnDirectCameraAndShots = defineAppFunction<Pure3DAgentContext>({
       if (!ctx.viewport.current) {
         captureNote = 'Viewport renderer unavailable; preview capture skipped.'
       } else {
-        const aspectName = asString(args.aspect) as
-          | (typeof ASPECTS)[number]
-          | undefined
-        const size =
-          typeof args.size === 'number' &&
-          Number.isInteger(args.size) &&
-          args.size >= 256 &&
-          args.size <= 2048
-            ? args.size
-            : undefined
+        const aspectName = validatedAspect
+        const size = validatedSize
         const sampleViews: Array<{ position: Vec3; target: Vec3; fov: number }> = []
         if (heroCamera) {
           sampleViews.push({

@@ -733,4 +733,151 @@ describe('Composite Pure3D App Functions (fn_*)', () => {
     expect(headless.store.getSnapshot().scene.settings.duration).toBe(6)
     expect(headless.document.save).toHaveBeenCalledTimes(1)
   })
+
+  it('enforces atomic validation and edge-case guards across all composite functions', async () => {
+    // 1. fn_inspectSceneHealth rejects unknown includeCatalog
+    const h1 = createHarness()
+    await expect(
+      h1.call('fn_inspectSceneHealth', { includeCatalog: 'bogus' }),
+    ).rejects.toThrow('Unknown includeCatalog')
+
+    // 2. fn_composeScene preserves existing scene when resetScene: true fails validation
+    const existingBox = { ...makeObject('box', 'Keep Me'), id: 'keep-me' }
+    h1.store.edit([{ op: 'add', object: existingBox }])
+    const beforeReset = h1.store.getSnapshot().scene
+    await expect(
+      h1.call('fn_composeScene', {
+        resetScene: true,
+        add: [
+          { id: 'dup', kind: 'box' },
+          { id: 'dup', kind: 'sphere' },
+        ],
+      }),
+    ).rejects.toThrow()
+    expect(h1.store.getSnapshot().scene).toBe(beforeReset)
+    await expect(
+      h1.call('fn_composeScene', {
+        resetScene: true,
+        add: [{ id: 'fresh', kind: 'box' }],
+        selectId: 'does-not-exist',
+      }),
+    ).rejects.toThrow('Unknown selected object')
+    expect(h1.store.getSnapshot().scene).toBe(beforeReset)
+    await expect(
+      h1.call('fn_composeScene', {
+        updates: [{ id: 'keep-me', name: '   ' }],
+      }),
+    ).rejects.toThrow('non-empty string')
+
+    // Explicit shot works headlessly in fn_composeScene
+    const headlessCompose = createHarness({ withViewport: false })
+    const composedHeadless = await headlessCompose.call('fn_composeScene', {
+      add: [{ id: 'cube', kind: 'box' }],
+      shot: { position: [3, 2, 4], target: [0, 0, 0], fov: 40 },
+    })
+    expect(composedHeadless.json.data.camera).toEqual({
+      position: [3, 2, 4],
+      target: [0, 0, 0],
+      fov: 40,
+    })
+
+    // 3. fn_setupLightingAndLook guards kind mismatch, allows overriding studio rig light, and avoids no-op save
+    const hLight = createHarness({ withViewport: false })
+    hLight.store.edit([{ op: 'add', object: { ...makeObject('box', 'Collision'), id: 'studio-backdrop' } }])
+    await expect(
+      hLight.call('fn_setupLightingAndLook', { addStudioRig: true }),
+    ).rejects.toThrow('already uses that ID')
+    const noOpShot = await hLight.call('fn_setupLightingAndLook', {
+      shot: { azimuth: 30 },
+    })
+    expect(noOpShot.json.data.cameraNote).toContain('unavailable')
+    expect(hLight.document.save).not.toHaveBeenCalled()
+
+    // Overriding studio-key-light in the same call updates instead of colliding
+    const hRig = createHarness()
+    const rigRes = await hRig.call('fn_setupLightingAndLook', {
+      addStudioRig: true,
+      lights: [
+        {
+          id: 'studio-key-light',
+          name: 'Warm Key',
+          type: 'area',
+          position: [4, 4, 4],
+          intensity: 4.5,
+        },
+      ],
+    })
+    expect(rigRes.json.data.lightIds).toEqual([
+      'studio-key-light',
+      'studio-fill-light',
+      'studio-rim-light',
+    ])
+
+    // 4. fn_styleMaterialsAndTextures validates texturePatch & generateTexture before mutating or spending API calls
+    const hStyle = createHarness()
+    hStyle.store.edit([
+      { op: 'add', object: { ...makeObject('box', 'A'), id: 'a' } },
+      { op: 'add', object: { ...makeObject('box', 'B'), id: 'b' } },
+    ])
+    const genSpy = vi.spyOn(vision, 'generate')
+    const beforeStyle = hStyle.store.getSnapshot().scene
+    await expect(
+      hStyle.call('fn_styleMaterialsAndTextures', {
+        assignments: [
+          { objectIds: ['a'], material: { preset: 'gold' } },
+          { objectIds: ['b'], texturePatch: { repeat: [2, 2] } },
+        ],
+      }),
+    ).rejects.toThrow('no resolved texture')
+    expect(hStyle.store.getSnapshot().scene).toBe(beforeStyle)
+
+    await expect(
+      hStyle.call('fn_styleMaterialsAndTextures', {
+        assignments: [{ objectIds: ['a'], material: { preset: 'gold' } }],
+        generateTexture: {
+          objectId: 'a',
+          prompt: 'Brick wall',
+          applyToObjectIds: ['missing-target'],
+        },
+      }),
+    ).rejects.toThrow('Unknown object ID')
+    expect(genSpy).not.toHaveBeenCalled()
+    expect(hStyle.store.getSnapshot().scene).toBe(beforeStyle)
+
+    await expect(
+      hStyle.call('fn_styleMaterialsAndTextures', {
+        generateTexture: {
+          objectId: 'a',
+          prompt: 'Brick wall',
+          size: '512x512',
+        },
+      }),
+    ).rejects.toThrow('generateTexture.size')
+    expect(genSpy).not.toHaveBeenCalled()
+
+    // 5. fn_directCameraAndShots validates time/aspect/size up front and uses explicit duration for orbit endTime
+    const hCam = createHarness()
+    hCam.store.edit([{ op: 'add', object: { ...makeObject('box', 'Obj'), id: 'obj' } }])
+    const beforeCam = hCam.store.getSnapshot().scene
+    await expect(
+      hCam.call('fn_directCameraAndShots', {
+        duration: 10,
+        time: -2,
+      }),
+    ).rejects.toThrow('time must be >= 0')
+    expect(hCam.store.getSnapshot().scene).toBe(beforeCam)
+    await expect(
+      hCam.call('fn_directCameraAndShots', {
+        capturePreview: true,
+        aspect: '2:1',
+      }),
+    ).rejects.toThrow('aspect must be one of')
+    const orbitRes = await hCam.call('fn_directCameraAndShots', {
+      duration: 10,
+      orbit: { steps: 3 },
+    })
+    expect(
+      orbitRes.json.data.authoredCameraKeys.map((k: { time: number }) => k.time),
+    ).toEqual([0, 5, 10])
+  })
 })
